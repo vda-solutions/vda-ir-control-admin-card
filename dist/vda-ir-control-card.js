@@ -37,6 +37,12 @@ class VDAIRControlCard extends HTMLElement {
     this._selectedSerialDevice = null;
     this._serialTestResult = null;
     this._availableSerialPorts = [];
+    // Accordion state for profile sections
+    this._expandedSections = {
+      community: false,
+      builtin: false,
+      custom: true
+    };
   }
 
   set hass(hass) {
@@ -1044,127 +1050,137 @@ class VDAIRControlCard extends HTMLElement {
 
   _renderProfilesTab() {
     return `
-      <!-- Community Profiles Section -->
-      <div class="section">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <div class="section-title" style="margin-bottom: 0;">Community Profiles</div>
+      <!-- Community Profiles Accordion -->
+      <div class="accordion-section" style="margin-bottom: 8px; border: 1px solid var(--divider-color); border-radius: 8px; overflow: hidden;">
+        <div class="accordion-header" data-action="toggle-section" data-section="community"
+             style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--secondary-background-color); cursor: pointer; user-select: none;">
           <div style="display: flex; align-items: center; gap: 12px;">
-            <span class="badge badge-info">${this._communityProfiles.length} synced</span>
-            <button class="btn btn-secondary btn-small" data-action="sync-community-profiles" ${this._isSyncing ? 'disabled' : ''}>
-              ${this._isSyncing ? 'Syncing...' : 'Sync from GitHub'}
-            </button>
+            <span style="transition: transform 0.2s; transform: rotate(${this._expandedSections.community ? '90deg' : '0deg'});">▶</span>
+            <span style="font-weight: 500;">Community Profiles</span>
+            <span class="badge badge-info">${this._communityProfiles.length}</span>
           </div>
+          <button class="btn btn-secondary btn-small" data-action="sync-community-profiles" ${this._isSyncing ? 'disabled' : ''} onclick="event.stopPropagation()">
+            ${this._isSyncing ? 'Syncing...' : 'Sync'}
+          </button>
         </div>
-        <p style="font-size: 12px; color: var(--secondary-text-color); margin-bottom: 12px;">
-          Last sync: ${this._formatLastSync(this._syncStatus?.last_sync)}
-          ${this._syncStatus?.repository_url ? ` • <a href="${this._syncStatus.repository_url}" target="_blank" style="color: var(--primary-color);">View Repository</a>` : ''}
-        </p>
-
-        ${this._communityProfiles.length === 0 ? `
-          <div class="empty-state" style="padding: 20px;">
-            <p style="color: var(--secondary-text-color);">No community profiles synced</p>
-            <p style="font-size: 12px; color: var(--secondary-text-color);">Click "Sync from GitHub" to download community-contributed profiles</p>
-          </div>
-        ` : `
-          <div class="builtin-profiles-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px;">
-            ${this._communityProfiles.map(profile => `
-              <div class="list-item" style="cursor: default; flex-direction: column; align-items: flex-start; padding: 12px;">
-                <div class="list-item-title" style="margin-bottom: 4px;">
-                  ${profile.name}
-                  <span class="badge" style="background: #6366f1; color: white; font-size: 9px;">Community</span>
-                </div>
-                <div class="list-item-subtitle" style="margin-bottom: 8px;">
-                  ${profile.manufacturer} • ${this._formatDeviceType(profile.device_type)}
-                </div>
-                <div style="font-size: 11px; color: var(--secondary-text-color); margin-bottom: 8px;">
-                  ${Object.keys(profile.codes || {}).length} commands • ${profile.protocol || 'NEC'} protocol
-                </div>
-                <button class="btn btn-primary btn-small" style="width: 100%;" data-action="use-community-profile" data-profile-id="${profile.profile_id}">
-                  Use This Profile
-                </button>
+        ${this._expandedSections.community ? `
+          <div class="accordion-content" style="padding: 12px 16px; border-top: 1px solid var(--divider-color);">
+            <p style="font-size: 12px; color: var(--secondary-text-color); margin-bottom: 12px;">
+              Last sync: ${this._formatLastSync(this._syncStatus?.last_sync)}
+              ${this._syncStatus?.repository_url ? ` • <a href="${this._syncStatus.repository_url}" target="_blank" style="color: var(--primary-color);">View Repository</a>` : ''}
+            </p>
+            ${this._communityProfiles.length === 0 ? `
+              <p style="color: var(--secondary-text-color); font-size: 13px;">No community profiles synced. Click Sync to download.</p>
+            ` : `
+              <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
+                ${this._communityProfiles.map(profile => `
+                  <div class="list-item" style="cursor: default; flex-direction: column; align-items: flex-start; padding: 10px;">
+                    <div class="list-item-title" style="margin-bottom: 4px; font-size: 13px;">
+                      ${profile.name}
+                    </div>
+                    <div class="list-item-subtitle" style="margin-bottom: 6px; font-size: 11px;">
+                      ${profile.manufacturer} • ${Object.keys(profile.codes || {}).length} cmds
+                    </div>
+                    <button class="btn btn-primary btn-small" style="width: 100%; padding: 4px 8px; font-size: 11px;" data-action="use-community-profile" data-profile-id="${profile.profile_id}">
+                      Use Profile
+                    </button>
+                  </div>
+                `).join('')}
               </div>
-            `).join('')}
+            `}
           </div>
-        `}
+        ` : ''}
       </div>
 
-      <!-- Built-in Profiles Section -->
-      <div class="section" style="margin-top: 24px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <div class="section-title" style="margin-bottom: 0;">Built-in Profiles</div>
-          <span class="badge badge-success">${this._builtinProfiles.length} available</span>
-        </div>
-
-        ${this._builtinProfiles.length === 0 ? `
-          <p style="color: var(--secondary-text-color); font-size: 13px;">Loading built-in profiles...</p>
-        ` : `
-          <div style="margin-bottom: 12px;">
-            <select id="builtin-filter" data-action="filter-builtin" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--divider-color); background: var(--input-fill-color, var(--secondary-background-color)); color: var(--primary-text-color);">
+      <!-- Built-in Profiles Accordion -->
+      <div class="accordion-section" style="margin-bottom: 8px; border: 1px solid var(--divider-color); border-radius: 8px; overflow: hidden;">
+        <div class="accordion-header" data-action="toggle-section" data-section="builtin"
+             style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--secondary-background-color); cursor: pointer; user-select: none;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="transition: transform 0.2s; transform: rotate(${this._expandedSections.builtin ? '90deg' : '0deg'});">▶</span>
+            <span style="font-weight: 500;">Built-in Profiles</span>
+            <span class="badge badge-success">${this._builtinProfiles.length}</span>
+          </div>
+          ${this._expandedSections.builtin ? `
+            <select id="builtin-filter" data-action="filter-builtin" onclick="event.stopPropagation()" style="padding: 4px 8px; border-radius: 4px; border: 1px solid var(--divider-color); background: var(--input-fill-color, var(--card-background-color)); color: var(--primary-text-color); font-size: 12px;">
               <option value="">All Types</option>
               ${this._builtinDeviceTypes.map(t => `<option value="${t}">${this._formatDeviceType(t)}</option>`).join('')}
             </select>
-          </div>
-          <div class="builtin-profiles-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px;">
-            ${this._builtinProfiles.map(profile => `
-              <div class="list-item" style="cursor: default; flex-direction: column; align-items: flex-start; padding: 12px;">
-                <div class="list-item-title" style="margin-bottom: 4px;">
-                  ${profile.name}
-                </div>
-                <div class="list-item-subtitle" style="margin-bottom: 8px;">
-                  ${profile.manufacturer} • ${this._formatDeviceType(profile.device_type)}
-                </div>
-                <div style="font-size: 11px; color: var(--secondary-text-color); margin-bottom: 8px;">
-                  ${Object.keys(profile.codes || {}).length} commands • ${profile.protocol} protocol
-                </div>
-                <button class="btn btn-primary btn-small" style="width: 100%;" data-action="use-builtin-profile" data-profile-id="${profile.profile_id}">
-                  Use This Profile
-                </button>
+          ` : ''}
+        </div>
+        ${this._expandedSections.builtin ? `
+          <div class="accordion-content" style="padding: 12px 16px; border-top: 1px solid var(--divider-color);">
+            ${this._builtinProfiles.length === 0 ? `
+              <p style="color: var(--secondary-text-color); font-size: 13px;">Loading built-in profiles...</p>
+            ` : `
+              <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
+                ${this._builtinProfiles.map(profile => `
+                  <div class="list-item" style="cursor: default; flex-direction: column; align-items: flex-start; padding: 10px;">
+                    <div class="list-item-title" style="margin-bottom: 4px; font-size: 13px;">
+                      ${profile.name}
+                    </div>
+                    <div class="list-item-subtitle" style="margin-bottom: 6px; font-size: 11px;">
+                      ${profile.manufacturer} • ${Object.keys(profile.codes || {}).length} cmds
+                    </div>
+                    <button class="btn btn-primary btn-small" style="width: 100%; padding: 4px 8px; font-size: 11px;" data-action="use-builtin-profile" data-profile-id="${profile.profile_id}">
+                      Use Profile
+                    </button>
+                  </div>
+                `).join('')}
               </div>
-            `).join('')}
+            `}
           </div>
-        `}
+        ` : ''}
       </div>
 
-      <!-- User Profiles Section -->
-      <div class="section" style="margin-top: 24px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <div class="section-title" style="margin-bottom: 0;">My Custom Profiles</div>
-          <button class="btn btn-primary btn-small" data-action="create-profile">
-            + New Profile
+      <!-- Custom Profiles Accordion -->
+      <div class="accordion-section" style="margin-bottom: 8px; border: 1px solid var(--divider-color); border-radius: 8px; overflow: hidden;">
+        <div class="accordion-header" data-action="toggle-section" data-section="custom"
+             style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--secondary-background-color); cursor: pointer; user-select: none;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="transition: transform 0.2s; transform: rotate(${this._expandedSections.custom ? '90deg' : '0deg'});">▶</span>
+            <span style="font-weight: 500;">My Custom Profiles</span>
+            <span class="badge badge-warning">${this._profiles.length}</span>
+          </div>
+          <button class="btn btn-primary btn-small" data-action="create-profile" onclick="event.stopPropagation()" style="padding: 4px 10px; font-size: 12px;">
+            + New
           </button>
         </div>
-
-        ${this._profiles.length === 0 ? `
-          <div class="empty-state" style="padding: 20px;">
-            <p style="color: var(--secondary-text-color);">No custom profiles yet</p>
-            <p style="font-size: 12px; color: var(--secondary-text-color);">Create a profile to learn IR codes from your remotes</p>
-          </div>
-        ` : this._profiles.map(profile => `
-          <div class="list-item ${this._selectedProfile === profile.profile_id ? 'selected' : ''}"
-               data-action="select-profile" data-profile-id="${profile.profile_id}">
-            <div class="list-item-content">
-              <div class="list-item-title">
-                ${profile.name}
-                <span class="badge badge-info">${profile.device_type}</span>
+        ${this._expandedSections.custom ? `
+          <div class="accordion-content" style="padding: 12px 16px; border-top: 1px solid var(--divider-color);">
+            ${this._profiles.length === 0 ? `
+              <p style="color: var(--secondary-text-color); font-size: 13px;">No custom profiles yet. Create one to learn IR codes.</p>
+            ` : `
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                ${this._profiles.map(profile => `
+                  <div class="list-item ${this._selectedProfile === profile.profile_id ? 'selected' : ''}"
+                       data-action="select-profile" data-profile-id="${profile.profile_id}" style="padding: 10px;">
+                    <div class="list-item-content">
+                      <div class="list-item-title" style="font-size: 13px;">
+                        ${profile.name}
+                        <span class="badge badge-info" style="font-size: 10px;">${profile.device_type}</span>
+                      </div>
+                      <div class="list-item-subtitle" style="font-size: 11px;">
+                        ${profile.manufacturer || 'Unknown'} • ${profile.learned_commands?.length || 0} commands
+                      </div>
+                    </div>
+                    <div class="list-item-actions" style="gap: 4px;">
+                      <button class="btn btn-secondary btn-small" style="padding: 4px 8px; font-size: 11px;" data-action="learn-commands" data-profile-id="${profile.profile_id}">
+                        Learn
+                      </button>
+                      <button class="btn btn-secondary btn-small" style="padding: 4px 8px; font-size: 11px;" data-action="export-profile" data-profile-id="${profile.profile_id}">
+                        Export
+                      </button>
+                      <button class="btn btn-danger btn-small" style="padding: 4px 8px; font-size: 11px;" data-action="delete-profile" data-profile-id="${profile.profile_id}">
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                `).join('')}
               </div>
-              <div class="list-item-subtitle">
-                ${profile.manufacturer || 'Unknown'} ${profile.model || ''} •
-                ${profile.learned_commands?.length || 0} commands learned
-              </div>
-            </div>
-            <div class="list-item-actions">
-              <button class="btn btn-secondary btn-small" data-action="learn-commands" data-profile-id="${profile.profile_id}">
-                Learn
-              </button>
-              <button class="btn btn-secondary btn-small" data-action="export-profile" data-profile-id="${profile.profile_id}" title="Export for contribution">
-                Export
-              </button>
-              <button class="btn btn-danger btn-small" data-action="delete-profile" data-profile-id="${profile.profile_id}">
-                Delete
-              </button>
-            </div>
+            `}
           </div>
-        `).join('')}
+        ` : ''}
       </div>
 
       ${this._renderExportModal()}
@@ -3270,6 +3286,14 @@ class VDAIRControlCard extends HTMLElement {
       case 'close-export-modal':
         this._exportModal = null;
         this._render();
+        break;
+
+      case 'toggle-section':
+        const section = e.target.closest('[data-section]')?.dataset.section;
+        if (section && this._expandedSections.hasOwnProperty(section)) {
+          this._expandedSections[section] = !this._expandedSections[section];
+          this._render();
+        }
         break;
 
       case 'copy-export-json':
