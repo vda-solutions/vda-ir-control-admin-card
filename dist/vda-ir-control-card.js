@@ -2281,7 +2281,7 @@ class VDAIRControlCard extends HTMLElement {
 
     return `
       <div class="modal" data-action="close-modal">
-        <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 550px;">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 500px;">
           <div class="modal-header">
             <h3>${driver ? `Add ${driver.name}` : 'Add Network Device'}</h3>
             <button class="modal-close" data-action="close-modal">&times;</button>
@@ -2289,105 +2289,111 @@ class VDAIRControlCard extends HTMLElement {
           <div class="modal-body">
             ${driver ? `
               <div style="margin-bottom: 16px; padding: 12px; background: var(--primary-color); color: white; border-radius: 8px;">
-                <div style="font-weight: 500; margin-bottom: 4px;">Using Driver: ${driver.name}</div>
+                <div style="font-weight: 500; margin-bottom: 4px;">${driver.name}</div>
                 <div style="font-size: 12px; opacity: 0.9;">
-                  ${driver.manufacturer || 'Generic'} • ${commandCount} commands pre-configured
-                  <span class="badge" style="background: rgba(255,255,255,0.2); margin-left: 8px;">${driver._source}</span>
+                  ${driver.manufacturer || 'Generic'} • ${deviceType.replace('_', ' ')} • Port ${defaultPort} (${defaultProtocol.toUpperCase()})
+                </div>
+                <div style="font-size: 11px; opacity: 0.8; margin-top: 4px;">
+                  ${commandCount} commands will be auto-configured
                 </div>
                 <input type="hidden" id="network-device-driver-id" value="${driver.driver_id}" />
+                <input type="hidden" id="network-device-port" value="${defaultPort}" />
+                <input type="hidden" id="network-device-protocol" value="${defaultProtocol}" />
+                <input type="hidden" id="network-device-type" value="${deviceType}" />
+              </div>
+              <div class="form-group">
+                <label>Device ID</label>
+                <input type="text" id="network-device-id" placeholder="${driver.driver_id}_1" />
+                <small>Unique identifier (lowercase, underscores ok)</small>
+              </div>
+              <div class="form-group">
+                <label>Name</label>
+                <input type="text" id="network-device-name" placeholder="${driver.name}" value="${driver.name}" />
+              </div>
+              <div class="form-group">
+                <label>IP Address</label>
+                <input type="text" id="network-device-host" placeholder="192.168.1.100" />
+              </div>
+              <div class="form-group">
+                <label>Location (optional)</label>
+                <input type="text" id="network-device-location" placeholder="Living Room" />
               </div>
             ` : `
               <div class="form-group">
-                <label>Driver (optional)</label>
-                <select id="network-device-driver" data-action="driver-changed">
-                  <option value="">-- No driver (manual config) --</option>
-                  ${this._networkDrivers.map(d => `<option value="${d.driver_id}">${d.name} (${d.manufacturer || 'Generic'})</option>`).join('')}
+                <label>Device ID</label>
+                <input type="text" id="network-device-id" placeholder="my_device_1" />
+                <small>Unique identifier (lowercase, underscores ok)</small>
+              </div>
+              <div class="form-group">
+                <label>Name</label>
+                <input type="text" id="network-device-name" placeholder="My Device" />
+              </div>
+              <div class="form-group">
+                <label>Device Type</label>
+                <select id="network-device-type" data-action="network-device-type-changed">
+                  <option value="hdmi_matrix">HDMI Matrix</option>
+                  <option value="hdmi_switch">HDMI Switch</option>
+                  <option value="projector">Projector</option>
+                  <option value="audio_receiver">Audio Receiver</option>
+                  <option value="av_processor">AV Processor</option>
+                  <option value="custom">Custom</option>
                 </select>
-                <small>Select a driver to auto-configure settings</small>
+              </div>
+              <div class="form-group">
+                <label>IP Address</label>
+                <input type="text" id="network-device-host" placeholder="192.168.1.100" />
+              </div>
+              <div style="display: flex; gap: 12px;">
+                <div class="form-group" style="flex: 1;">
+                  <label>Port</label>
+                  <input type="number" id="network-device-port" value="8000" min="1" max="65535" />
+                </div>
+                <div class="form-group" style="flex: 1;">
+                  <label>Protocol</label>
+                  <select id="network-device-protocol">
+                    <option value="tcp">TCP</option>
+                    <option value="udp">UDP</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Location (optional)</label>
+                <input type="text" id="network-device-location" placeholder="Living Room" />
+              </div>
+
+              <!-- Matrix Configuration (shown when device type is hdmi_matrix) -->
+              <div id="matrix-config-section" style="margin-top: 16px; padding: 12px; background: var(--secondary-background-color); border-radius: 8px;">
+                <div style="font-weight: 500; margin-bottom: 12px;">Matrix Configuration</div>
+                <div style="display: flex; gap: 16px;">
+                  <div class="form-group" style="flex: 1;">
+                    <label>Inputs</label>
+                    <select id="matrix-input-count" data-action="matrix-config-changed">
+                      ${[2,4,6,8,10,12,16].map(n => `<option value="${n}" ${n === 4 ? 'selected' : ''}>${n}</option>`).join('')}
+                    </select>
+                  </div>
+                  <div class="form-group" style="flex: 1;">
+                    <label>Outputs</label>
+                    <select id="matrix-output-count" data-action="matrix-config-changed">
+                      ${[2,4,6,8,10,12,16].map(n => `<option value="${n}" ${n === 4 ? 'selected' : ''}>${n}</option>`).join('')}
+                    </select>
+                  </div>
+                </div>
+                <div class="form-group" style="margin-top: 12px;">
+                  <label>Routing Command</label>
+                  <input type="text" id="matrix-command-template" placeholder="s cir {input} {output}!" style="font-family: monospace;" />
+                  <small>Use {input} and {output} placeholders</small>
+                </div>
+                <div class="form-group" style="margin-top: 8px;">
+                  <label>Line Ending</label>
+                  <select id="matrix-command-line-ending">
+                    <option value="none">None</option>
+                    <option value="cr">CR</option>
+                    <option value="lf">LF</option>
+                    <option value="crlf" selected>CRLF</option>
+                  </select>
+                </div>
               </div>
             `}
-            <div class="form-group">
-              <label>Device ID</label>
-              <input type="text" id="network-device-id" placeholder="${driver ? driver.driver_id + '_1' : 'hdmi_matrix_1'}" />
-              <small>Unique identifier (lowercase, underscores ok)</small>
-            </div>
-            <div class="form-group">
-              <label>Name</label>
-              <input type="text" id="network-device-name" placeholder="${driver ? driver.name : 'HDMI Matrix'}" value="${driver ? driver.name : ''}" />
-            </div>
-            <div class="form-group">
-              <label>Host/IP Address</label>
-              <input type="text" id="network-device-host" placeholder="192.168.1.100" />
-            </div>
-            <div class="form-group">
-              <label>Port</label>
-              <input type="number" id="network-device-port" value="${defaultPort}" min="1" max="65535" />
-            </div>
-            <div class="form-group">
-              <label>Protocol</label>
-              <select id="network-device-protocol">
-                <option value="tcp" ${defaultProtocol === 'tcp' ? 'selected' : ''}>TCP</option>
-                <option value="udp" ${defaultProtocol === 'udp' ? 'selected' : ''}>UDP</option>
-              </select>
-            </div>
-            <div class="form-group" ${driver ? 'style="display: none;"' : ''}>
-              <label>Device Type</label>
-              <select id="network-device-type" data-action="network-device-type-changed">
-                <option value="hdmi_matrix" ${deviceType === 'hdmi_matrix' ? 'selected' : ''}>HDMI Matrix</option>
-                <option value="hdmi_switch" ${deviceType === 'hdmi_switch' ? 'selected' : ''}>HDMI Switch</option>
-                <option value="projector" ${deviceType === 'projector' ? 'selected' : ''}>Projector</option>
-                <option value="audio_receiver" ${deviceType === 'audio_receiver' ? 'selected' : ''}>Audio Receiver</option>
-                <option value="av_processor" ${deviceType === 'av_processor' ? 'selected' : ''}>AV Processor</option>
-                <option value="custom" ${deviceType === 'custom' ? 'selected' : ''}>Custom</option>
-              </select>
-            </div>
-
-            <!-- Matrix Configuration (shown when device type is hdmi_matrix) -->
-            <div id="matrix-config-section" style="margin-top: 16px; padding: 12px; background: var(--secondary-background-color); border-radius: 8px; ${isMatrix ? '' : 'display: none;'}">
-              <div style="font-weight: 500; margin-bottom: 12px;">Matrix Configuration</div>
-              <div style="display: flex; gap: 16px;">
-                <div class="form-group" style="flex: 1;">
-                  <label>Number of Inputs</label>
-                  <select id="matrix-input-count" data-action="matrix-config-changed">
-                    ${[2,4,6,8,10,12,16].map(n => `<option value="${n}" ${n === inputCount ? 'selected' : ''}>${n}</option>`).join('')}
-                  </select>
-                </div>
-                <div class="form-group" style="flex: 1;">
-                  <label>Number of Outputs</label>
-                  <select id="matrix-output-count" data-action="matrix-config-changed">
-                    ${[2,4,6,8,10,12,16].map(n => `<option value="${n}" ${n === outputCount ? 'selected' : ''}>${n}</option>`).join('')}
-                  </select>
-                </div>
-              </div>
-
-              <div class="form-group" style="margin-top: 12px;">
-                <label>Routing Command Template</label>
-                <input type="text" id="matrix-command-template" placeholder="s in {input} av out {output}!"
-                       value="${routingTemplate}" style="font-family: monospace;" />
-                <small style="display: block; margin-top: 4px; color: var(--secondary-text-color);">
-                  Use <code>{input}</code> and <code>{output}</code> as placeholders.
-                </small>
-              </div>
-
-              <div class="form-group" style="margin-top: 8px;">
-                <label>Line Ending</label>
-                <select id="matrix-command-line-ending">
-                  <option value="none" ${defaultLineEnding === 'none' ? 'selected' : ''}>None</option>
-                  <option value="cr" ${defaultLineEnding === 'cr' ? 'selected' : ''}>CR (\\r)</option>
-                  <option value="lf" ${defaultLineEnding === 'lf' ? 'selected' : ''}>LF (\\n)</option>
-                  <option value="crlf" ${defaultLineEnding === 'crlf' ? 'selected' : ''}>CRLF (\\r\\n)</option>
-                </select>
-              </div>
-
-              <div id="matrix-io-names" style="margin-top: 12px;">
-                ${this._renderMatrixIONames(inputCount, outputCount)}
-              </div>
-            </div>
-
-            <div class="form-group" style="margin-top: 16px;">
-              <label>Location (optional)</label>
-              <input type="text" id="network-device-location" placeholder="Living Room" />
-            </div>
             <div style="margin-top: 16px;">
               <button class="btn btn-secondary" data-action="test-connection">Test Connection</button>
               <span id="test-connection-result" style="margin-left: 8px; font-size: 12px;"></span>
@@ -2395,7 +2401,7 @@ class VDAIRControlCard extends HTMLElement {
           </div>
           <div class="modal-footer">
             <button class="btn btn-secondary" data-action="close-modal">Cancel</button>
-            <button class="btn btn-primary" data-action="save-network-device">${driver ? 'Create from Driver' : 'Create Device'}</button>
+            <button class="btn btn-primary" data-action="save-network-device">${driver ? 'Create Device' : 'Create Device'}</button>
           </div>
         </div>
       </div>
