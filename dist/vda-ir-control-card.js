@@ -287,6 +287,45 @@ class VDAIRControlCard extends HTMLElement {
     }
   }
 
+  async _downloadCommunityProfile(profileId) {
+    if (this._isDownloading) return;
+
+    this._isDownloading = profileId;
+    this._render();
+
+    try {
+      console.log('Downloading profile:', profileId);
+      const resp = await fetch(`/api/vda_ir_control/download_profile/${profileId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+        },
+      });
+
+      console.log('Download response:', resp.status);
+      if (resp.ok) {
+        const result = await resp.json();
+        console.log('Download result:', result);
+        if (result.success) {
+          // Reload community profiles to show updated download status
+          await this._loadCommunityProfiles();
+          // Reload builtin profiles since downloaded profiles appear there
+          await this._loadBuiltinProfiles();
+          console.log('Profile downloaded successfully');
+        } else {
+          console.error('Failed to download profile:', result.message);
+        }
+      } else {
+        console.error('Failed to download profile:', resp.status);
+      }
+    } catch (e) {
+      console.error('Failed to download profile:', e);
+    } finally {
+      this._isDownloading = null;
+      this._render();
+    }
+  }
+
   async _exportProfileForContribution(profileId) {
     try {
       const resp = await fetch(`/api/vda_ir_control/export_profile/${profileId}`, {
@@ -1041,11 +1080,14 @@ class VDAIRControlCard extends HTMLElement {
                       ${profile.name}
                     </div>
                     <div class="list-item-subtitle" style="margin-bottom: 6px; font-size: 11px;">
-                      ${profile.manufacturer} • ${Object.keys(profile.codes || {}).length} cmds
+                      ${profile.manufacturer} • ${profile.command_count != null ? profile.command_count + ' cmds' : 'Unknown cmds'}
                     </div>
-                    <button class="btn btn-primary btn-small" style="width: 100%; padding: 4px 8px; font-size: 11px;" data-action="use-community-profile" data-profile-id="${profile.profile_id}">
-                      Use Profile
-                    </button>
+                    <div style="display: flex; gap: 4px; width: 100%;">
+                      <button class="btn btn-primary btn-small" style="flex: 1; padding: 4px 8px; font-size: 11px;" data-action="${profile.downloaded ? 'use-community-profile' : 'download-profile'}" data-profile-id="${profile.profile_id}" ${this._isDownloading === profile.profile_id ? 'disabled' : ''}>
+                        ${this._isDownloading === profile.profile_id ? 'Downloading...' : (profile.downloaded ? 'Use' : 'Download')}
+                      </button>
+                      ${profile.downloaded ? `<button class="btn btn-danger btn-small" style="padding: 4px 6px; font-size: 11px;" data-action="delete-community-profile" data-profile-id="${profile.profile_id}" title="Remove from local cache">✕</button>` : ''}
+                    </div>
                   </div>
                 `).join('')}
               </div>
@@ -3066,6 +3108,10 @@ class VDAIRControlCard extends HTMLElement {
         await this._deleteProfile(e.target.dataset.profileId);
         break;
 
+      case 'delete-community-profile':
+        await this._deleteCommunityProfile(e.target.dataset.profileId);
+        break;
+
       case 'learn-commands':
         this._modal = { type: 'learn-commands', profileId: e.target.dataset.profileId };
         this._learningState = null;
@@ -3168,6 +3214,10 @@ class VDAIRControlCard extends HTMLElement {
 
       case 'sync-community-profiles':
         await this._syncCommunityProfiles();
+        break;
+
+      case 'download-profile':
+        await this._downloadCommunityProfile(e.target.dataset.profileId);
         break;
 
       case 'sync-network-drivers':
@@ -3512,14 +3562,49 @@ class VDAIRControlCard extends HTMLElement {
     if (!confirm(`Delete profile "${profileId}"?`)) return;
 
     try {
-      await this._hass.callService('vda_ir_control', 'delete_profile', {
-        profile_id: profileId,
+      const response = await this._hass.callWS({
+        type: 'call_service',
+        domain: 'vda_ir_control',
+        service: 'delete_profile',
+        service_data: { profile_id: profileId },
+        return_response: false,
       });
       await this._loadProfiles();
       this._render();
     } catch (e) {
-      console.error('Failed to delete profile:', e);
-      alert('Failed to delete profile');
+      // Try API fallback
+      try {
+        await fetch(`/api/vda_ir_control/profiles/${profileId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${this._hass.auth.data.access_token}` },
+        });
+        await this._loadProfiles();
+        this._render();
+      } catch (e2) {
+        console.error('Failed to delete profile:', e2);
+        alert('Failed to delete profile');
+      }
+    }
+  }
+
+  async _deleteCommunityProfile(profileId) {
+    if (!confirm(`Remove "${profileId}" from local cache? You can re-download it later.`)) return;
+
+    try {
+      const response = await fetch(`/api/vda_ir_control/delete_community_profile/${profileId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${this._hass.auth.data.access_token}` },
+      });
+      const result = await response.json();
+      if (result.success) {
+        await this._loadCommunityProfiles();
+        this._render();
+      } else {
+        alert(`Failed to delete: ${result.message}`);
+      }
+    } catch (e) {
+      console.error('Failed to delete community profile:', e);
+      alert('Failed to delete community profile');
     }
   }
 
