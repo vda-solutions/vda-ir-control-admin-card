@@ -28,10 +28,6 @@ class VDAIRControlCard extends HTMLElement {
     this._communityProfiles = [];
     this._syncStatus = null;
     this._isSyncing = false;
-    // Network devices state
-    this._networkDevices = [];
-    this._selectedNetworkDevice = null;
-    this._networkTestResult = null;
     // Serial devices state
     this._serialDevices = [];
     this._selectedSerialDevice = null;
@@ -41,14 +37,8 @@ class VDAIRControlCard extends HTMLElement {
     this._expandedSections = {
       community: false,
       builtin: false,
-      custom: true,
-      drivers: true
+      custom: true
     };
-    // Network drivers state
-    this._networkDrivers = [];
-    this._driverSyncStatus = null;
-    this._isSyncingDrivers = false;
-    this._selectedDriver = null;
   }
 
   set hass(hass) {
@@ -79,9 +69,7 @@ class VDAIRControlCard extends HTMLElement {
       this._loadCommunityProfiles(),
       this._loadDevices(),
       this._loadGPIOPins(),
-      this._loadNetworkDevices(),
       this._loadSerialDevices(),
-      this._loadNetworkDrivers(),
     ]);
     this._render();
   }
@@ -283,16 +271,16 @@ class VDAIRControlCard extends HTMLElement {
         if (result.success) {
           // Reload community profiles
           await this._loadCommunityProfiles();
-          this._showNotification(`Synced: ${result.message}`, 'success');
+          // notification removed;
         } else {
-          this._showNotification(`Sync failed: ${result.message}`, 'error');
+          // notification removed;
         }
       } else {
-        this._showNotification('Failed to sync profiles', 'error');
+        // notification removed;
       }
     } catch (e) {
       console.error('Failed to sync community profiles:', e);
-      this._showNotification('Sync error: ' + e.message, 'error');
+      // notification removed;
     } finally {
       this._isSyncing = false;
       this._render();
@@ -320,12 +308,18 @@ class VDAIRControlCard extends HTMLElement {
         };
         this._render();
       } else {
-        this._showNotification('Failed to export profile', 'error');
+        // notification removed;
       }
     } catch (e) {
       console.error('Failed to export profile:', e);
-      this._showNotification('Export error: ' + e.message, 'error');
+      // notification removed;
     }
+  }
+
+  _escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   _formatLastSync(isoString) {
@@ -356,41 +350,6 @@ class VDAIRControlCard extends HTMLElement {
       console.error('Failed to load devices:', e);
       this._devices = [];
     }
-  }
-
-  async _loadNetworkDevices() {
-    try {
-      const resp = await fetch('/api/vda_ir_control/network_devices', {
-        headers: {
-          'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
-        },
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        this._networkDevices = data.devices || [];
-      } else {
-        this._networkDevices = [];
-      }
-    } catch (e) {
-      console.error('Failed to load network devices:', e);
-      this._networkDevices = [];
-    }
-  }
-
-  async _loadNetworkDevice(deviceId) {
-    try {
-      const resp = await fetch(`/api/vda_ir_control/network_devices/${deviceId}`, {
-        headers: {
-          'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
-        },
-      });
-      if (resp.ok) {
-        return await resp.json();
-      }
-    } catch (e) {
-      console.error('Failed to load network device:', e);
-    }
-    return null;
   }
 
   async _loadSerialDevices() {
@@ -447,57 +406,6 @@ class VDAIRControlCard extends HTMLElement {
     }
   }
 
-  async _loadNetworkDrivers() {
-    try {
-      const resp = await fetch('/api/vda_ir_control/drivers', {
-        headers: {
-          'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
-        },
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        this._networkDrivers = data.drivers || [];
-        this._driverSyncStatus = data.sync_status || null;
-      } else {
-        this._networkDrivers = [];
-        this._driverSyncStatus = null;
-      }
-    } catch (e) {
-      console.error('Failed to load network drivers:', e);
-      this._networkDrivers = [];
-      this._driverSyncStatus = null;
-    }
-  }
-
-  async _syncNetworkDrivers() {
-    if (this._isSyncingDrivers) return;
-    this._isSyncingDrivers = true;
-    this._render();
-    try {
-      const resp = await fetch('/api/vda_ir_control/sync_drivers', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
-        },
-      });
-      if (resp.ok) {
-        const result = await resp.json();
-        if (result.success) {
-          this._showNotification(result.message, 'success');
-        } else {
-          this._showNotification(result.message || 'Sync failed', 'error');
-        }
-        await this._loadNetworkDrivers();
-      } else {
-        this._showNotification('Failed to sync drivers', 'error');
-      }
-    } catch (e) {
-      console.error('Failed to sync network drivers:', e);
-      this._showNotification('Sync error: ' + e.message, 'error');
-    }
-    this._isSyncingDrivers = false;
-    this._render();
-  }
 
   async _loadPorts(boardId) {
     try {
@@ -962,9 +870,6 @@ class VDAIRControlCard extends HTMLElement {
           <button class="tab ${this._activeTab === 'devices' ? 'active' : ''}" data-tab="devices">
             Devices
           </button>
-          <button class="tab ${this._activeTab === 'network' ? 'active' : ''}" data-tab="network">
-            Network
-          </button>
           <button class="tab ${this._activeTab === 'serial' ? 'active' : ''}" data-tab="serial">
             Serial
           </button>
@@ -989,8 +894,6 @@ class VDAIRControlCard extends HTMLElement {
         return this._renderProfilesTab();
       case 'devices':
         return this._renderDevicesTab();
-      case 'network':
-        return this._renderNetworkTab();
       case 'serial':
         return this._renderSerialTab();
       default:
@@ -1338,170 +1241,6 @@ class VDAIRControlCard extends HTMLElement {
             </div>
           </div>
         `).join('')}
-      </div>
-    `;
-  }
-
-  _renderNetworkTab() {
-    const builtinDrivers = this._networkDrivers.filter(d => d._source === 'builtin');
-    const communityDrivers = this._networkDrivers.filter(d => d._source === 'community');
-
-    return `
-      <!-- Device Drivers Accordion -->
-      <div class="accordion-section" style="margin-bottom: 16px; border: 1px solid var(--divider-color); border-radius: 8px; overflow: hidden;">
-        <div class="accordion-header" data-action="toggle-section" data-section="drivers"
-             style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--secondary-background-color); cursor: pointer; user-select: none;">
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <span style="transition: transform 0.2s; transform: rotate(${this._expandedSections.drivers ? '90deg' : '0deg'});">▶</span>
-            <span style="font-weight: 500;">Device Drivers</span>
-            <span class="badge badge-info">${this._networkDrivers.length}</span>
-          </div>
-          <button class="btn btn-secondary btn-small" data-action="sync-network-drivers" ${this._isSyncingDrivers ? 'disabled' : ''} onclick="event.stopPropagation()">
-            ${this._isSyncingDrivers ? 'Syncing...' : 'Sync'}
-          </button>
-        </div>
-        ${this._expandedSections.drivers ? `
-          <div class="accordion-content" style="padding: 12px 16px; border-top: 1px solid var(--divider-color);">
-            <p style="font-size: 12px; color: var(--secondary-text-color); margin-bottom: 12px;">
-              Select a driver to auto-configure network device settings.
-              Last sync: ${this._formatLastSync(this._driverSyncStatus?.last_sync)}
-            </p>
-            ${this._networkDrivers.length === 0 ? `
-              <p style="color: var(--secondary-text-color); font-size: 13px;">No drivers available. Click Sync to download community drivers.</p>
-            ` : `
-              <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px;">
-                ${this._networkDrivers.map(driver => `
-                  <div class="list-item" style="cursor: pointer; flex-direction: column; align-items: flex-start; padding: 10px; ${this._selectedDriver === driver.driver_id ? 'border: 2px solid var(--primary-color);' : ''}"
-                       data-action="select-driver" data-driver-id="${driver.driver_id}">
-                    <div class="list-item-title" style="margin-bottom: 4px; font-size: 13px;">
-                      ${driver.name}
-                    </div>
-                    <div class="list-item-subtitle" style="margin-bottom: 6px; font-size: 11px;">
-                      ${driver.manufacturer || 'Generic'} • ${driver.device_type}
-                      <span class="badge ${driver._source === 'builtin' ? 'badge-success' : 'badge-info'}" style="font-size: 9px;">${driver._source}</span>
-                    </div>
-                    <button class="btn btn-primary btn-small" style="width: 100%; padding: 4px 8px; font-size: 11px;"
-                            data-action="use-driver" data-driver-id="${driver.driver_id}" onclick="event.stopPropagation()">
-                      Use Driver
-                    </button>
-                  </div>
-                `).join('')}
-              </div>
-            `}
-          </div>
-        ` : ''}
-      </div>
-
-      <div class="section">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <div class="section-title" style="margin-bottom: 0;">Network Devices</div>
-          <button class="btn btn-primary btn-small" data-action="create-network-device">
-            + Add Device
-          </button>
-        </div>
-
-        ${this._networkDevices.length === 0 ? `
-          <div class="empty-state">
-            <div class="empty-state-icon">🌐</div>
-            <p>No network devices</p>
-            <p style="font-size: 12px;">Select a driver above or add a custom device</p>
-          </div>
-        ` : this._networkDevices.map(device => `
-          <div class="list-item ${this._selectedNetworkDevice === device.device_id ? 'selected' : ''}"
-               data-action="select-network-device" data-device-id="${device.device_id}">
-            <div class="list-item-content">
-              <div class="list-item-title">
-                ${device.name}
-                <span class="badge ${device.connected ? 'badge-success' : 'badge-danger'}">
-                  ${device.connected ? 'Online' : 'Offline'}
-                </span>
-                ${device.device_type === 'hdmi_matrix' ? '<span class="badge badge-info">Matrix</span>' : ''}
-                ${device.location ? `<span class="badge badge-warning">${device.location}</span>` : ''}
-              </div>
-              <div class="list-item-subtitle">
-                ${device.host}:${device.port} (${device.protocol.toUpperCase()}) • ${device.command_count} commands
-              </div>
-            </div>
-            <div class="list-item-actions">
-              <button class="btn btn-secondary btn-small" data-action="test-network-device" data-device-id="${device.device_id}">
-                Test
-              </button>
-              ${device.device_type === 'hdmi_matrix' ? `
-              <button class="btn btn-secondary btn-small" data-action="edit-matrix-io" data-device-id="${device.device_id}" data-device-type="network">
-                Edit I/O
-              </button>
-              ` : ''}
-              <button class="btn btn-secondary btn-small" data-action="edit-network-device" data-device-id="${device.device_id}">
-                Commands
-              </button>
-              <button class="btn btn-danger btn-small" data-action="delete-network-device" data-device-id="${device.device_id}">
-                Delete
-              </button>
-            </div>
-          </div>
-        `).join('')}
-
-        ${this._selectedNetworkDevice ? this._renderNetworkDeviceCommands() : ''}
-      </div>
-
-      ${this._renderNetworkTestResult()}
-    `;
-  }
-
-  _renderNetworkDeviceCommands() {
-    const device = this._networkDevices.find(d => d.device_id === this._selectedNetworkDevice);
-    if (!device) return '';
-
-    return `
-      <div class="section" style="margin-top: 16px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <div class="section-title" style="margin-bottom: 0;">Commands for ${device.name}</div>
-          <button class="btn btn-primary btn-small" data-action="add-network-command" data-device-id="${device.device_id}">
-            + Add Command
-          </button>
-        </div>
-        <div class="command-list">
-          ${!device.commands || Object.keys(device.commands || {}).length === 0 ? `
-            <p style="color: var(--secondary-text-color); font-size: 12px;">No commands configured. Add commands to control this device.</p>
-          ` : Object.entries(device.commands || {}).map(([id, cmd]) => `
-            <div class="command-item" style="display: flex; align-items: center; padding: 8px; background: var(--secondary-background-color); border-radius: 6px; margin-bottom: 4px;">
-              <div style="flex: 1;">
-                <div style="font-weight: 500;">${cmd.name}</div>
-                <div style="font-size: 11px; color: var(--secondary-text-color);">
-                  ${cmd.payload} ${cmd.line_ending !== 'none' ? `[${cmd.line_ending.toUpperCase()}]` : ''}
-                  ${cmd.is_input_option ? '<span style="color: var(--info-color);">[Input]</span>' : ''}
-                  ${cmd.is_query ? '<span style="color: var(--warning-color);">[Query]</span>' : ''}
-                </div>
-              </div>
-              <button class="btn btn-secondary btn-small" data-action="send-network-command"
-                      data-device-id="${device.device_id}" data-command-id="${id}">
-                Send
-              </button>
-              <button class="btn btn-danger btn-small" style="margin-left: 4px;" data-action="delete-network-command"
-                      data-device-id="${device.device_id}" data-command-id="${id}">
-                ×
-              </button>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    `;
-  }
-
-  _renderNetworkTestResult() {
-    if (!this._networkTestResult) return '';
-
-    const result = this._networkTestResult;
-    return `
-      <div class="section" style="margin-top: 16px;">
-        <div class="section-title">Test Result</div>
-        <div style="padding: 12px; background: var(--secondary-background-color); border-radius: 8px;
-                    border-left: 4px solid ${result.success ? 'var(--success-color, #4caf50)' : 'var(--error-color, #f44336)'};">
-          <div style="font-weight: 500; margin-bottom: 4px;">${result.success ? 'Success' : 'Failed'}</div>
-          <div style="font-size: 12px; color: var(--secondary-text-color);">
-            ${result.message || (result.response ? `Response: ${result.response}` : 'No response')}
-          </div>
-        </div>
       </div>
     `;
   }
@@ -2156,9 +1895,8 @@ class VDAIRControlCard extends HTMLElement {
   }
 
   _renderMatrixLinkSection() {
-    // Combine network and serial devices that could be matrices
+    // Serial devices that could be matrices
     const matrixDevices = [
-      ...this._networkDevices.map(d => ({ ...d, type: 'network' })),
       ...this._serialDevices.map(d => ({ ...d, type: 'serial' })),
     ];
 
@@ -2167,7 +1905,7 @@ class VDAIRControlCard extends HTMLElement {
         <div style="margin-top: 16px; padding: 12px; background: var(--secondary-background-color, #f5f5f5); border-radius: 8px;">
           <div style="font-weight: 500; color: var(--secondary-text-color);">Link to HDMI Matrix (Optional)</div>
           <div style="font-size: 12px; color: var(--secondary-text-color); margin-top: 4px;">
-            No network or serial devices configured. Add a matrix device in the Network or Serial tab first.
+            No serial devices configured. Add a matrix device in the Serial tab first.
           </div>
         </div>
       `;
@@ -2267,52 +2005,68 @@ class VDAIRControlCard extends HTMLElement {
 
   _renderCreateNetworkDeviceModal() {
     const driver = this._modal?.driver;
-    const conn = driver?.connection || {};
-    const matrixCfg = driver?.matrix_config || {};
-    const defaultPort = conn.default_port || 8000;
-    const defaultProtocol = conn.protocol || 'tcp';
-    const deviceType = driver?.device_type || 'hdmi_matrix';
+    const discovered = this._modal?.discoveredDevice;
+
+    // If discovered device, try to match with a driver
+    let matchedDriver = null;
+    if (discovered && discovered.suggested_driver_id) {
+      matchedDriver = this._networkDrivers.find(d => d.driver_id === discovered.suggested_driver_id);
+    }
+
+    // Use matched driver if available, otherwise use explicitly selected driver
+    const activeDriver = matchedDriver || driver;
+
+    const conn = activeDriver?.connection || {};
+    const matrixCfg = activeDriver?.matrix_config || {};
+    const defaultPort = discovered?.port || conn.default_port || 8000;
+    const defaultProtocol = discovered?.protocol || conn.protocol || 'tcp';
+    const deviceType = activeDriver?.device_type || 'hdmi_matrix';
     const isMatrix = deviceType === 'hdmi_matrix';
     const inputCount = matrixCfg.input_count || 4;
     const outputCount = matrixCfg.output_count || 4;
     const routingTemplate = matrixCfg.routing_command_template || '';
-    const defaultLineEnding = driver?.communication?.default_line_ending || 'crlf';
-    const commandCount = driver?.commands ? Object.keys(driver.commands).length : 0;
+    const defaultLineEnding = activeDriver?.communication?.default_line_ending || 'crlf';
+    const commandCount = activeDriver?.commands ? Object.keys(activeDriver.commands).length : 0;
+
+    // Pre-fill values from discovered device
+    const defaultName = discovered?.name || (activeDriver ? activeDriver.name : '');
+    const defaultHost = discovered?.ip_address || '';
+    const defaultDeviceId = discovered ? defaultName.toLowerCase().replace(/[^a-z0-9]/g, '_') : '';
 
     return `
       <div class="modal" data-action="close-modal">
         <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 500px;">
           <div class="modal-header">
-            <h3>${driver ? `Add ${driver.name}` : 'Add Network Device'}</h3>
+            <h3>${discovered ? `Add ${defaultName}` : activeDriver ? `Add ${activeDriver.name}` : 'Add Network Device'}</h3>
             <button class="modal-close" data-action="close-modal">&times;</button>
           </div>
           <div class="modal-body">
-            ${driver ? `
+            ${activeDriver ? `
               <div style="margin-bottom: 16px; padding: 12px; background: var(--primary-color); color: white; border-radius: 8px;">
-                <div style="font-weight: 500; margin-bottom: 4px;">${driver.name}</div>
+                <div style="font-weight: 500; margin-bottom: 4px;">${activeDriver.name}</div>
                 <div style="font-size: 12px; opacity: 0.9;">
-                  ${driver.manufacturer || 'Generic'} • ${deviceType.replace('_', ' ')} • Port ${defaultPort} (${defaultProtocol.toUpperCase()})
+                  ${activeDriver.manufacturer || 'Generic'} • ${deviceType.replace('_', ' ')} • Port ${defaultPort} (${defaultProtocol.toUpperCase()})
                 </div>
                 <div style="font-size: 11px; opacity: 0.8; margin-top: 4px;">
-                  ${commandCount} commands will be auto-configured
+                  ${commandCount} commands will be auto-configured${discovered ? ' • Auto-discovered' : ''}
                 </div>
-                <input type="hidden" id="network-device-driver-id" value="${driver.driver_id}" />
+                <input type="hidden" id="network-device-driver-id" value="${activeDriver.driver_id}" />
                 <input type="hidden" id="network-device-port" value="${defaultPort}" />
                 <input type="hidden" id="network-device-protocol" value="${defaultProtocol}" />
                 <input type="hidden" id="network-device-type" value="${deviceType}" />
               </div>
               <div class="form-group">
                 <label>Device ID</label>
-                <input type="text" id="network-device-id" placeholder="${driver.driver_id}_1" />
+                <input type="text" id="network-device-id" placeholder="${activeDriver.driver_id}_1" value="${defaultDeviceId}" />
                 <small>Unique identifier (lowercase, underscores ok)</small>
               </div>
               <div class="form-group">
                 <label>Name</label>
-                <input type="text" id="network-device-name" placeholder="${driver.name}" value="${driver.name}" />
+                <input type="text" id="network-device-name" placeholder="${activeDriver.name}" value="${defaultName}" />
               </div>
               <div class="form-group">
                 <label>IP Address</label>
-                <input type="text" id="network-device-host" placeholder="192.168.1.100" />
+                <input type="text" id="network-device-host" placeholder="192.168.1.100" value="${defaultHost}" />
               </div>
               <div class="form-group">
                 <label>Location (optional)</label>
@@ -2983,7 +2737,6 @@ class VDAIRControlCard extends HTMLElement {
 
     const boards = this._getBoards();
     const matrixDevices = [
-      ...this._networkDevices.map(d => ({ ...d, type: 'network' })),
       ...this._serialDevices.map(d => ({ ...d, type: 'serial' })),
     ];
 
@@ -3421,6 +3174,19 @@ class VDAIRControlCard extends HTMLElement {
         await this._syncNetworkDrivers();
         break;
 
+      case 'discover-devices':
+        await this._discoverNetworkDevices();
+        break;
+
+      case 'add-discovered-device':
+        const deviceData = JSON.parse(e.target.dataset.device);
+        this._modal = {
+          type: 'create-network-device',
+          discoveredDevice: deviceData
+        };
+        this._render();
+        break;
+
       case 'select-driver':
         this._selectedDriver = e.target.closest('[data-driver-id]').dataset.driverId;
         this._render();
@@ -3457,7 +3223,7 @@ class VDAIRControlCard extends HTMLElement {
         if (textarea) {
           textarea.select();
           document.execCommand('copy');
-          this._showNotification('Copied to clipboard!', 'success');
+          // notification removed;
         }
         break;
 
@@ -3933,13 +3699,24 @@ class VDAIRControlCard extends HTMLElement {
   // ========== Network Device Methods ==========
 
   async _testNetworkConnection() {
-    const host = this.shadowRoot.getElementById('network-device-host').value;
-    const port = parseInt(this.shadowRoot.getElementById('network-device-port').value);
-    const protocol = this.shadowRoot.getElementById('network-device-protocol').value;
+    const hostEl = this.shadowRoot.getElementById('network-device-host');
+    const portEl = this.shadowRoot.getElementById('network-device-port');
+    const protocolEl = this.shadowRoot.getElementById('network-device-protocol');
     const resultSpan = this.shadowRoot.getElementById('test-connection-result');
 
-    if (!host || !port) {
-      resultSpan.textContent = 'Enter host and port first';
+    const host = hostEl ? hostEl.value.trim() : '';
+    const portValue = portEl ? portEl.value : '';
+    const port = parseInt(portValue, 10);
+    const protocol = protocolEl ? protocolEl.value : 'tcp';
+
+    if (!host) {
+      resultSpan.textContent = 'Enter IP address first';
+      resultSpan.style.color = 'var(--error-color, #f44336)';
+      return;
+    }
+
+    if (isNaN(port) || port <= 0 || port > 65535) {
+      resultSpan.textContent = `Invalid port: ${portValue}`;
       resultSpan.style.color = 'var(--error-color, #f44336)';
       return;
     }
@@ -3948,36 +3725,78 @@ class VDAIRControlCard extends HTMLElement {
     resultSpan.style.color = 'var(--secondary-text-color)';
 
     try {
+      // Get auth token - try multiple paths for compatibility
+      const token = this._hass?.auth?.data?.access_token ||
+                   this._hass?.connection?.options?.auth?.accessToken || '';
+
+      if (!token) {
+        resultSpan.textContent = 'Auth error - please refresh the page';
+        resultSpan.style.color = 'var(--error-color, #f44336)';
+        return;
+      }
+
       const resp = await fetch('/api/vda_ir_control/test_connection', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ host, port, protocol }),
       });
+
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        resultSpan.textContent = `HTTP ${resp.status}: ${errorText.substring(0, 50)}`;
+        resultSpan.style.color = 'var(--error-color, #f44336)';
+        return;
+      }
+
       const result = await resp.json();
-      resultSpan.textContent = result.success ? 'Connected!' : result.message;
+      resultSpan.textContent = result.success ? 'Connected!' : (result.message || 'Connection failed');
       resultSpan.style.color = result.success ? 'var(--success-color, #4caf50)' : 'var(--error-color, #f44336)';
     } catch (e) {
+      console.error('Test connection error:', e);
       resultSpan.textContent = 'Test failed: ' + e.message;
       resultSpan.style.color = 'var(--error-color, #f44336)';
     }
   }
 
   async _saveNetworkDevice() {
-    const deviceId = this.shadowRoot.getElementById('network-device-id').value.trim();
-    const name = this.shadowRoot.getElementById('network-device-name').value.trim();
-    const host = this.shadowRoot.getElementById('network-device-host').value.trim();
-    const port = parseInt(this.shadowRoot.getElementById('network-device-port').value);
-    const protocol = this.shadowRoot.getElementById('network-device-protocol').value;
-    const deviceType = this.shadowRoot.getElementById('network-device-type').value;
-    const location = this.shadowRoot.getElementById('network-device-location').value.trim();
+    const deviceIdEl = this.shadowRoot.getElementById('network-device-id');
+    const nameEl = this.shadowRoot.getElementById('network-device-name');
+    const hostEl = this.shadowRoot.getElementById('network-device-host');
+    const portEl = this.shadowRoot.getElementById('network-device-port');
+    const protocolEl = this.shadowRoot.getElementById('network-device-protocol');
+    const deviceTypeEl = this.shadowRoot.getElementById('network-device-type');
+    const locationEl = this.shadowRoot.getElementById('network-device-location');
     const driverIdEl = this.shadowRoot.getElementById('network-device-driver-id');
+
+    const deviceId = deviceIdEl ? deviceIdEl.value.trim() : '';
+    const name = nameEl ? nameEl.value.trim() : '';
+    const host = hostEl ? hostEl.value.trim() : '';
+    const portValue = portEl ? portEl.value : '';
+    const port = parseInt(portValue, 10);
+    const protocol = protocolEl ? protocolEl.value : 'tcp';
+    const deviceType = deviceTypeEl ? deviceTypeEl.value : 'custom';
+    const location = locationEl ? locationEl.value.trim() : '';
     const driverId = driverIdEl ? driverIdEl.value : null;
 
-    if (!deviceId || !name || !host || !port) {
-      alert('Please fill in all required fields');
+    if (!deviceId || !name || !host) {
+      alert('Please fill in Device ID, Name, and IP Address');
+      return;
+    }
+
+    if (isNaN(port) || port <= 0 || port > 65535) {
+      alert(`Invalid port number: ${portValue}`);
+      return;
+    }
+
+    // Get auth token - try multiple paths for compatibility
+    const token = this._hass?.auth?.data?.access_token ||
+                 this._hass?.connection?.options?.auth?.accessToken || '';
+
+    if (!token) {
+      alert('Authentication error - please refresh the page');
       return;
     }
 
@@ -3991,7 +3810,7 @@ class VDAIRControlCard extends HTMLElement {
         resp = await fetch('/api/vda_ir_control/create_from_driver', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -4010,7 +3829,7 @@ class VDAIRControlCard extends HTMLElement {
         resp = await fetch('/api/vda_ir_control/network_devices', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -4028,16 +3847,23 @@ class VDAIRControlCard extends HTMLElement {
 
       if (resp.ok) {
         this._modal = null;
-        this._showNotification(driverId ? `Created ${name} from driver` : `Created ${name}`, 'success');
+        // notification removed;
         await this._loadNetworkDevices();
         this._render();
       } else {
-        const error = await resp.json();
-        alert('Failed to create device: ' + (error.error || 'Unknown error'));
+        let errorMsg = `HTTP ${resp.status}`;
+        try {
+          const error = await resp.json();
+          errorMsg = error.error || error.message || errorMsg;
+        } catch {
+          const errorText = await resp.text();
+          errorMsg = errorText.substring(0, 100) || errorMsg;
+        }
+        alert('Failed to create device: ' + errorMsg);
       }
     } catch (e) {
       console.error('Failed to create network device:', e);
-      alert('Failed to create device');
+      alert('Failed to create device: ' + e.message);
     }
   }
 
@@ -4157,10 +3983,14 @@ class VDAIRControlCard extends HTMLElement {
     this._render();
 
     try {
+      // Get auth token - try multiple paths for compatibility
+      const token = this._hass?.auth?.data?.access_token ||
+                   this._hass?.connection?.options?.auth?.accessToken || '';
+
       const resp = await fetch(`/api/vda_ir_control/network_devices/${deviceId}/send`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -4199,20 +4029,47 @@ class VDAIRControlCard extends HTMLElement {
 
     try {
       const device = this._networkDevices.find(d => d.device_id === deviceId);
-      if (!device) return;
+      if (!device) {
+        this._networkTestResult = { success: false, message: 'Device not found' };
+        this._render();
+        return;
+      }
+
+      // Get auth token - try multiple paths for compatibility
+      const token = this._hass?.auth?.data?.access_token ||
+                   this._hass?.connection?.options?.auth?.accessToken || '';
+
+      if (!token) {
+        this._networkTestResult = { success: false, message: 'Auth error - refresh page' };
+        this._render();
+        return;
+      }
 
       const resp = await fetch('/api/vda_ir_control/test_connection', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           host: device.host,
           port: device.port,
-          protocol: device.protocol,
+          protocol: device.protocol || 'tcp',
         }),
       });
+
+      if (!resp.ok) {
+        let errorMsg = `HTTP ${resp.status}`;
+        try {
+          const error = await resp.json();
+          errorMsg = error.error || error.message || errorMsg;
+        } catch {
+          errorMsg = await resp.text() || errorMsg;
+        }
+        this._networkTestResult = { success: false, message: errorMsg };
+        this._render();
+        return;
+      }
 
       const result = await resp.json();
       this._networkTestResult = result;
