@@ -255,6 +255,12 @@ class VDAIRControlCard extends HTMLElement {
   async _syncCommunityProfiles() {
     if (this._isSyncing) return;
 
+    // Check if any boards are adopted
+    if (!this._boards || this._boards.length === 0) {
+      alert('Please adopt an IR Node to sync IR Profiles.\n\nFor more info visit:\nhttps://github.com/vda-solutions/vda-ir-control');
+      return;
+    }
+
     this._isSyncing = true;
     this._render();
 
