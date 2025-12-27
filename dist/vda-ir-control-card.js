@@ -1956,7 +1956,7 @@ class VDAIRControlCard extends HTMLElement {
       <div style="margin-top: 16px; padding: 12px; background: var(--secondary-background-color, #f5f5f5); border-radius: 8px;">
         <div class="form-group" style="margin-bottom: 8px;">
           <label><input type="checkbox" id="device-link-matrix" data-action="toggle-matrix-link" style="margin-right: 8px; vertical-align: middle;" />Link to HDMI Matrix</label>
-          <small>Link this device to an HDMI matrix output for input selection</small>
+          <small>Connect this device to an HDMI matrix</small>
         </div>
         <div id="matrix-link-options" style="display: none;">
           <div class="form-group">
@@ -1969,11 +1969,18 @@ class VDAIRControlCard extends HTMLElement {
             </select>
           </div>
           <div class="form-group">
-            <label>Matrix Output</label>
-            <select id="device-matrix-output">
-              <option value="">Select matrix first...</option>
+            <label>Device Type</label>
+            <select id="device-matrix-type" data-action="matrix-type-changed">
+              <option value="input">Input Device (Source: Cable Box, Streaming, etc.)</option>
+              <option value="output">Output Device (Display: TV, Projector, etc.)</option>
             </select>
-            <small>Which matrix output is this device connected to?</small>
+          </div>
+          <div class="form-group">
+            <label id="matrix-port-label">Matrix Input</label>
+            <select id="device-matrix-port">
+              <option value="">Select port...</option>
+            </select>
+            <small id="matrix-port-help">Which matrix input is this device connected to?</small>
           </div>
         </div>
       </div>
@@ -1995,12 +2002,28 @@ class VDAIRControlCard extends HTMLElement {
     return outputs;
   }
 
-  async _updateMatrixOutputOptions(matrixDeviceId) {
-    const outputSelect = this.shadowRoot.getElementById('device-matrix-output');
-    if (!outputSelect) return;
+  async _updateMatrixPortOptions(matrixDeviceId) {
+    const portSelect = this.shadowRoot.getElementById('device-matrix-port');
+    const typeSelect = this.shadowRoot.getElementById('device-matrix-type');
+    const portLabel = this.shadowRoot.getElementById('matrix-port-label');
+    const portHelp = this.shadowRoot.getElementById('matrix-port-help');
+
+    if (!portSelect) return;
+
+    const isInput = typeSelect?.value === 'input';
+
+    // Update labels based on device type
+    if (portLabel) {
+      portLabel.textContent = isInput ? 'Matrix Input' : 'Matrix Output';
+    }
+    if (portHelp) {
+      portHelp.textContent = isInput
+        ? 'Which matrix input is this source device connected to?'
+        : 'Which matrix output is this display connected to?';
+    }
 
     if (!matrixDeviceId) {
-      outputSelect.innerHTML = '<option value="">Select matrix first...</option>';
+      portSelect.innerHTML = '<option value="">Select matrix first...</option>';
       return;
     }
 
@@ -2009,7 +2032,7 @@ class VDAIRControlCard extends HTMLElement {
     const selectedOption = matrixIdSelect?.options[matrixIdSelect.selectedIndex];
     const matrixType = selectedOption?.dataset.type;
 
-    // Fetch matrix device to get actual output names
+    // Fetch matrix device to get actual port names
     try {
       const endpoint = matrixType === 'network'
         ? `/api/vda_ir_control/network_devices/${matrixDeviceId}`
@@ -2021,27 +2044,29 @@ class VDAIRControlCard extends HTMLElement {
 
       if (resp.ok) {
         const device = await resp.json();
-        const outputs = device.matrix_outputs || [];
+        const ports = isInput ? (device.matrix_inputs || []) : (device.matrix_outputs || []);
+        const portType = isInput ? 'Input' : 'Output';
 
-        if (outputs.length > 0) {
-          let html = '<option value="">Select output...</option>';
-          outputs.forEach(o => {
-            html += `<option value="${o.index}">${o.name || 'Output ' + o.index}</option>`;
+        if (ports.length > 0) {
+          let html = `<option value="">Select ${portType.toLowerCase()}...</option>`;
+          ports.forEach(p => {
+            html += `<option value="${p.index}">${p.name || portType + ' ' + p.index}</option>`;
           });
-          outputSelect.innerHTML = html;
+          portSelect.innerHTML = html;
           return;
         }
       }
     } catch (e) {
-      console.error('Failed to fetch matrix outputs:', e);
+      console.error('Failed to fetch matrix ports:', e);
     }
 
     // Fallback to generic options 1-8
-    let html = '<option value="">Select output...</option>';
+    const portType = isInput ? 'Input' : 'Output';
+    let html = `<option value="">Select ${portType.toLowerCase()}...</option>`;
     for (let i = 1; i <= 8; i++) {
-      html += `<option value="${i}">Output ${i}</option>`;
+      html += `<option value="${i}">${portType} ${i}</option>`;
     }
-    outputSelect.innerHTML = html;
+    portSelect.innerHTML = html;
   }
 
   _renderCreateNetworkDeviceModal() {
@@ -2853,12 +2878,12 @@ class VDAIRControlCard extends HTMLElement {
           <div style="margin-top: 16px; padding: 12px; background: var(--secondary-background-color, #f5f5f5); border-radius: 8px;">
             <div class="form-group" style="margin-bottom: 8px;">
               <label><input type="checkbox" id="edit-device-link-matrix" ${hasMatrixLink ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;" />Link to HDMI Matrix</label>
-              <small>Link this device to an HDMI matrix output for input selection</small>
+              <small>Connect this device to an HDMI matrix</small>
             </div>
             <div id="edit-matrix-link-options" style="display: ${hasMatrixLink ? 'block' : 'none'};">
               <div class="form-group">
                 <label>Matrix Device</label>
-                <select id="edit-device-matrix-id">
+                <select id="edit-device-matrix-id" data-action="edit-matrix-device-changed">
                   <option value="">Select a matrix...</option>
                   ${matrixDevices.map(d => `
                     <option value="${d.device_id}" data-type="${d.type}" ${device.matrix_device_id === d.device_id ? 'selected' : ''}>${d.name} (${d.type === 'network' ? 'Network' : 'Serial'})</option>
@@ -2866,13 +2891,20 @@ class VDAIRControlCard extends HTMLElement {
                 </select>
               </div>
               <div class="form-group">
-                <label>Matrix Output</label>
-                <select id="edit-device-matrix-output">
-                  ${this._modal?.matrixOutputOptions ? this._modal.matrixOutputOptions.map(o => `
-                    <option value="${o.value}" ${device.matrix_output === o.value ? 'selected' : ''}>${o.label}</option>
-                  `).join('') : `<option value="${device.matrix_output || ''}">Output ${device.matrix_output || '?'}</option>`}
+                <label>Device Type</label>
+                <select id="edit-device-matrix-type" data-action="edit-matrix-type-changed">
+                  <option value="input" ${device.matrix_port_type !== 'output' ? 'selected' : ''}>Input Device (Source: Cable Box, Streaming, etc.)</option>
+                  <option value="output" ${device.matrix_port_type === 'output' ? 'selected' : ''}>Output Device (Display: TV, Projector, etc.)</option>
                 </select>
-                <small>Which matrix output is this device connected to?</small>
+              </div>
+              <div class="form-group">
+                <label id="edit-matrix-port-label">${device.matrix_port_type === 'output' ? 'Matrix Output' : 'Matrix Input'}</label>
+                <select id="edit-device-matrix-port">
+                  ${this._modal?.matrixPortOptions ? this._modal.matrixPortOptions.map(o => `
+                    <option value="${o.value}" ${device.matrix_port === o.value ? 'selected' : ''}>${o.label}</option>
+                  `).join('') : `<option value="${device.matrix_port || ''}">${device.matrix_port_type === 'output' ? 'Output' : 'Input'} ${device.matrix_port || '?'}</option>`}
+                </select>
+                <small id="edit-matrix-port-help">${device.matrix_port_type === 'output' ? 'Which matrix output is this display connected to?' : 'Which matrix input is this source device connected to?'}</small>
               </div>
             </div>
           </div>
@@ -2951,12 +2983,28 @@ class VDAIRControlCard extends HTMLElement {
     }, 0);
   }
 
-  async _updateEditMatrixOutputOptions(matrixDeviceId, matrixType) {
-    const outputSelect = this.shadowRoot.getElementById('edit-device-matrix-output');
-    if (!outputSelect) return;
+  async _updateEditMatrixPortOptions(matrixDeviceId, matrixType) {
+    const portSelect = this.shadowRoot.getElementById('edit-device-matrix-port');
+    const typeSelect = this.shadowRoot.getElementById('edit-device-matrix-type');
+    const portLabel = this.shadowRoot.getElementById('edit-matrix-port-label');
+    const portHelp = this.shadowRoot.getElementById('edit-matrix-port-help');
+
+    if (!portSelect) return;
+
+    const isInput = typeSelect?.value === 'input';
+
+    // Update labels based on device type
+    if (portLabel) {
+      portLabel.textContent = isInput ? 'Matrix Input' : 'Matrix Output';
+    }
+    if (portHelp) {
+      portHelp.textContent = isInput
+        ? 'Which matrix input is this source device connected to?'
+        : 'Which matrix output is this display connected to?';
+    }
 
     if (!matrixDeviceId) {
-      outputSelect.innerHTML = '<option value="">Select matrix first...</option>';
+      portSelect.innerHTML = '<option value="">Select matrix first...</option>';
       return;
     }
 
@@ -2971,20 +3019,22 @@ class VDAIRControlCard extends HTMLElement {
 
       if (resp.ok) {
         const device = await resp.json();
-        const outputs = device.matrix_outputs || [];
-        if (outputs.length > 0) {
-          outputSelect.innerHTML = outputs.map(o => `
-            <option value="${o.index}">${o.name || 'Output ' + o.index}</option>
+        const ports = isInput ? (device.matrix_inputs || []) : (device.matrix_outputs || []);
+        const portType = isInput ? 'Input' : 'Output';
+
+        if (ports.length > 0) {
+          portSelect.innerHTML = ports.map(p => `
+            <option value="${p.index}">${p.name || portType + ' ' + p.index}</option>
           `).join('');
         } else {
-          // Default to 8 outputs
-          outputSelect.innerHTML = Array.from({length: 8}, (_, i) => `
-            <option value="${i+1}">Output ${i+1}</option>
+          // Default to 8 ports
+          portSelect.innerHTML = Array.from({length: 8}, (_, i) => `
+            <option value="${i+1}">${portType} ${i+1}</option>
           `).join('');
         }
       }
     } catch (e) {
-      console.error('Failed to fetch matrix outputs:', e);
+      console.error('Failed to fetch matrix ports:', e);
     }
   }
 
@@ -3001,7 +3051,8 @@ class VDAIRControlCard extends HTMLElement {
     // Matrix link fields
     const linkMatrix = this.shadowRoot.getElementById('edit-device-link-matrix')?.checked;
     const matrixIdSelect = this.shadowRoot.getElementById('edit-device-matrix-id');
-    const matrixOutputSelect = this.shadowRoot.getElementById('edit-device-matrix-output');
+    const matrixTypeSelect = this.shadowRoot.getElementById('edit-device-matrix-type');
+    const matrixPortSelect = this.shadowRoot.getElementById('edit-device-matrix-port');
 
     if (!name) {
       alert('Device name is required');
@@ -3020,14 +3071,17 @@ class VDAIRControlCard extends HTMLElement {
     // Add matrix link data if enabled
     if (linkMatrix && matrixIdSelect && matrixIdSelect.value) {
       const selectedOption = matrixIdSelect.options[matrixIdSelect.selectedIndex];
+      const isInputDevice = matrixTypeSelect?.value === 'input';
       serviceData.matrix_device_id = matrixIdSelect.value;
       serviceData.matrix_device_type = selectedOption.dataset.type;
-      serviceData.matrix_output = matrixOutputSelect ? matrixOutputSelect.value : null;
+      serviceData.matrix_port_type = isInputDevice ? 'input' : 'output';
+      serviceData.matrix_port = matrixPortSelect ? matrixPortSelect.value : null;
     } else {
       // Clear matrix link
       serviceData.matrix_device_id = null;
       serviceData.matrix_device_type = null;
-      serviceData.matrix_output = null;
+      serviceData.matrix_port_type = null;
+      serviceData.matrix_port = null;
     }
 
     try {
@@ -3149,7 +3203,12 @@ class VDAIRControlCard extends HTMLElement {
         break;
 
       case 'matrix-device-changed':
-        await this._updateMatrixOutputOptions(e.target.value);
+        await this._updateMatrixPortOptions(e.target.value);
+        break;
+
+      case 'matrix-type-changed':
+        const matrixId = this.shadowRoot.getElementById('device-matrix-id')?.value;
+        await this._updateMatrixPortOptions(matrixId);
         break;
 
       case 'save-device':
@@ -3166,6 +3225,18 @@ class VDAIRControlCard extends HTMLElement {
 
       case 'update-device':
         await this._updateDevice();
+        break;
+
+      case 'edit-matrix-device-changed':
+        const editMatrixIdSelect = this.shadowRoot.getElementById('edit-device-matrix-id');
+        const editSelectedOption = editMatrixIdSelect?.options[editMatrixIdSelect.selectedIndex];
+        await this._updateEditMatrixPortOptions(e.target.value, editSelectedOption?.dataset.type);
+        break;
+
+      case 'edit-matrix-type-changed':
+        const editMatrixId = this.shadowRoot.getElementById('edit-device-matrix-id')?.value;
+        const editMatrixOption = this.shadowRoot.getElementById('edit-device-matrix-id')?.options[this.shadowRoot.getElementById('edit-device-matrix-id')?.selectedIndex];
+        await this._updateEditMatrixPortOptions(editMatrixId, editMatrixOption?.dataset.type);
         break;
 
       case 'test-device':
@@ -3692,7 +3763,8 @@ class VDAIRControlCard extends HTMLElement {
     const linkMatrixCheckbox = this.shadowRoot.getElementById('device-link-matrix');
     const linkMatrix = linkMatrixCheckbox ? linkMatrixCheckbox.checked : false;
     const matrixIdSelect = this.shadowRoot.getElementById('device-matrix-id');
-    const matrixOutputSelect = this.shadowRoot.getElementById('device-matrix-output');
+    const matrixTypeSelect = this.shadowRoot.getElementById('device-matrix-type');
+    const matrixPortSelect = this.shadowRoot.getElementById('device-matrix-port');
 
     if (!deviceId || !name || !profileId || !boardId) {
       alert('Please fill in all required fields');
@@ -3717,9 +3789,11 @@ class VDAIRControlCard extends HTMLElement {
     // Add matrix link data if enabled
     if (linkMatrix && matrixIdSelect && matrixIdSelect.value) {
       const selectedOption = matrixIdSelect.options[matrixIdSelect.selectedIndex];
+      const isInputDevice = matrixTypeSelect?.value === 'input';
       serviceData.matrix_device_id = matrixIdSelect.value;
       serviceData.matrix_device_type = selectedOption.dataset.type;
-      serviceData.matrix_output = matrixOutputSelect ? matrixOutputSelect.value : null;
+      serviceData.matrix_port_type = isInputDevice ? 'input' : 'output';
+      serviceData.matrix_port = matrixPortSelect ? matrixPortSelect.value : null;
     }
 
     try {
