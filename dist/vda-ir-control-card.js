@@ -228,9 +228,8 @@ class VDAIRControlCard extends HTMLElement {
 
   async _loadCommunityProfiles() {
     try {
-      // Use status=downloaded to only show profiles that have been downloaded
-      // (not all available profiles from the manifest)
-      const resp = await fetch('/api/vda_ir_control/community_profiles?status=downloaded', {
+      // Load available profiles from manifest for browsing/downloading in Profiles tab
+      const resp = await fetch('/api/vda_ir_control/community_profiles?status=available', {
         headers: {
           'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
         },
@@ -1098,13 +1097,13 @@ class VDAIRControlCard extends HTMLElement {
         ` : ''}
       </div>
 
-      <!-- Built-in Profiles Accordion -->
+      <!-- Downloaded Profiles Accordion -->
       <div class="accordion-section" style="margin-bottom: 8px; border: 1px solid var(--divider-color); border-radius: 8px; overflow: hidden;">
         <div class="accordion-header" data-action="toggle-section" data-section="builtin"
              style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--secondary-background-color); cursor: pointer; user-select: none;">
           <div style="display: flex; align-items: center; gap: 12px;">
             <span style="transition: transform 0.2s; transform: rotate(${this._expandedSections.builtin ? '90deg' : '0deg'});">▶</span>
-            <span style="font-weight: 500;">Built-in Profiles</span>
+            <span style="font-weight: 500;">Downloaded Profiles</span>
             <span class="badge badge-success">${this._builtinProfiles.length}</span>
           </div>
           ${this._expandedSections.builtin ? `
@@ -1513,15 +1512,8 @@ class VDAIRControlCard extends HTMLElement {
           <div class="form-group">
             <label>Profile</label>
             <select id="device-profile">
-              ${this._communityProfiles.length > 0 ? `
-                <optgroup label="Community Profiles">
-                  ${this._communityProfiles.map(p => `
-                    <option value="community:${p.profile_id}" ${this._modal?.preselectedProfile === `community:${p.profile_id}` ? 'selected' : ''}>${p.name} (${p.manufacturer})</option>
-                  `).join('')}
-                </optgroup>
-              ` : ''}
               ${this._builtinProfiles.length > 0 ? `
-                <optgroup label="Built-in Profiles">
+                <optgroup label="Downloaded Profiles">
                   ${this._builtinProfiles.map(p => `
                     <option value="builtin:${p.profile_id}" ${this._modal?.preselectedProfile === `builtin:${p.profile_id}` ? 'selected' : ''}>${p.name} (${p.manufacturer})</option>
                   `).join('')}
@@ -1534,7 +1526,7 @@ class VDAIRControlCard extends HTMLElement {
                   `).join('')}
                 </optgroup>
               ` : ''}
-              ${this._profiles.length === 0 && this._builtinProfiles.length === 0 && this._communityProfiles.length === 0 ? '<option value="">No profiles available</option>' : ''}
+              ${this._profiles.length === 0 && this._builtinProfiles.length === 0 ? '<option value="">No profiles available</option>' : ''}
             </select>
           </div>
 
@@ -2810,15 +2802,8 @@ class VDAIRControlCard extends HTMLElement {
           <div class="form-group">
             <label>Profile</label>
             <select id="edit-device-profile">
-              ${this._communityProfiles.length > 0 ? `
-                <optgroup label="Community Profiles">
-                  ${this._communityProfiles.map(p => `
-                    <option value="community:${p.profile_id}" ${device.device_profile_id === `community:${p.profile_id}` ? 'selected' : ''}>${p.name} (${p.manufacturer})</option>
-                  `).join('')}
-                </optgroup>
-              ` : ''}
               ${this._builtinProfiles.length > 0 ? `
-                <optgroup label="Built-in Profiles">
+                <optgroup label="Downloaded Profiles">
                   ${this._builtinProfiles.map(p => `
                     <option value="builtin:${p.profile_id}" ${device.device_profile_id === `builtin:${p.profile_id}` ? 'selected' : ''}>${p.name} (${p.manufacturer})</option>
                   `).join('')}
