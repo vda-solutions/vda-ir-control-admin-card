@@ -228,8 +228,7 @@ class VDAIRControlCard extends HTMLElement {
 
   async _loadCommunityProfiles() {
     try {
-      // Load available profiles from manifest for browsing/downloading in Profiles tab
-      const resp = await fetch('/api/vda_ir_control/community_profiles?status=available', {
+      const resp = await fetch('/api/vda_ir_control/community_profiles', {
         headers: {
           'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
         },
