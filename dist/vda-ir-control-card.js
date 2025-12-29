@@ -2618,6 +2618,20 @@ class VDAIRControlCard extends HTMLElement {
             </p>
 
             <div style="margin-bottom: 24px;">
+              <h4 style="margin: 0 0 12px 0; font-size: 14px; color: var(--primary-text-color);">Routing Command Template</h4>
+              <div style="background: var(--secondary-background-color); padding: 12px; border-radius: 8px;">
+                <p style="color: var(--secondary-text-color); font-size: 11px; margin: 0 0 8px 0;">
+                  Template for routing commands. Use {input} and {output} as placeholders.<br>
+                  Example for OREI: <code>s in {input} av out {output}!</code>
+                </p>
+                <input type="text" id="routing-template"
+                       value="${matrixDevice.routing_template || ''}"
+                       placeholder="s in {input} av out {output}!"
+                       style="width: 100%; padding: 8px 12px; border: 1px solid var(--divider-color); border-radius: 4px; font-family: monospace;" />
+              </div>
+            </div>
+
+            <div style="margin-bottom: 24px;">
               <h4 style="margin: 0 0 12px 0; font-size: 14px; color: var(--primary-text-color);">Inputs (Sources)</h4>
               <div style="background: var(--secondary-background-color); padding: 12px; border-radius: 8px;">
                 ${matrixInputs.length === 0 ? `
@@ -2787,6 +2801,10 @@ class VDAIRControlCard extends HTMLElement {
       });
     });
 
+    // Get routing template
+    const routingTemplateInput = this.shadowRoot.getElementById('routing-template');
+    const routingTemplate = routingTemplateInput?.value || '';
+
     try {
       const endpoint = deviceType === 'network'
         ? `/api/vda_ir_control/network_devices/${matrixDevice.device_id}`
@@ -2800,7 +2818,8 @@ class VDAIRControlCard extends HTMLElement {
         },
         body: JSON.stringify({
           matrix_inputs: matrixInputs,
-          matrix_outputs: matrixOutputs
+          matrix_outputs: matrixOutputs,
+          routing_template: routingTemplate
         })
       });
 
