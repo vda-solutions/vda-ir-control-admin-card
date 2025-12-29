@@ -2807,6 +2807,9 @@ class VDAIRControlCard extends HTMLElement {
       if (resp.ok) {
         // Sync controlled devices with matrix I/O assignments
         const linkedDevices = this._modal?.linkedDevices || [];
+        console.log('Saving matrix I/O - linkedDevices:', linkedDevices);
+        console.log('Saving matrix I/O - matrixInputs:', matrixInputs);
+        console.log('Saving matrix I/O - matrixOutputs:', matrixOutputs);
 
         // Update devices assigned to inputs
         for (const input of matrixInputs) {
@@ -2854,6 +2857,7 @@ class VDAIRControlCard extends HTMLElement {
   }
 
   async _updateDeviceMatrixLink(deviceId, matrixDeviceId, matrixDeviceType, portType, port) {
+    console.log(`Updating device ${deviceId} matrix link:`, { matrixDeviceId, matrixDeviceType, portType, port });
     try {
       await this._hass.callService('vda_ir_control', 'update_device', {
         device_id: deviceId,
@@ -2862,6 +2866,7 @@ class VDAIRControlCard extends HTMLElement {
         matrix_port_type: portType,
         matrix_port: port
       });
+      console.log(`Successfully updated device ${deviceId}`);
     } catch (e) {
       console.error(`Failed to update device ${deviceId} matrix link:`, e);
     }
