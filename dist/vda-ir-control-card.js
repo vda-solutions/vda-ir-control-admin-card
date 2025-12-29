@@ -2945,11 +2945,22 @@ class VDAIRControlCard extends HTMLElement {
 
         if (resp.ok) {
           const matrixDevice = await resp.json();
-          const outputs = matrixDevice.matrix_outputs || [];
-          matrixOutputOptions = outputs.map(o => ({
-            value: String(o.index),
-            label: o.name || `Output ${o.index}`
-          }));
+          const isInput = device.matrix_port_type === 'input';
+          const ports = isInput ? (matrixDevice.matrix_inputs || []) : (matrixDevice.matrix_outputs || []);
+          const portType = isInput ? 'Input' : 'Output';
+
+          if (ports.length > 0) {
+            matrixOutputOptions = ports.map(o => ({
+              value: String(o.index),
+              label: o.name || `${portType} ${o.index}`
+            }));
+          } else {
+            // Default to 8 ports if none configured
+            matrixOutputOptions = Array.from({length: 8}, (_, i) => ({
+              value: String(i + 1),
+              label: `${portType} ${i + 1}`
+            }));
+          }
         }
       } catch (e) {
         console.error('Failed to load matrix outputs:', e);
@@ -2977,7 +2988,7 @@ class VDAIRControlCard extends HTMLElement {
       const matrixSelect = this.shadowRoot.getElementById('edit-device-matrix-id');
       if (matrixSelect) {
         matrixSelect.addEventListener('change', async (e) => {
-          await this._updateEditMatrixOutputOptions(e.target.value, e.target.options[e.target.selectedIndex]?.dataset.type);
+          await this._updateEditMatrixPortOptions(e.target.value, e.target.options[e.target.selectedIndex]?.dataset.type);
         });
       }
     }, 0);
