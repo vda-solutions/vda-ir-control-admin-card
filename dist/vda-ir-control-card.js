@@ -2628,6 +2628,15 @@ class VDAIRControlCard extends HTMLElement {
                        value="${matrixDevice.routing_template || ''}"
                        placeholder="s in {input} av out {output}!"
                        style="width: 100%; padding: 8px 12px; border: 1px solid var(--divider-color); border-radius: 4px; font-family: monospace;" />
+                <label style="display: block; margin: 12px 0 4px 0; font-size: 12px; color: var(--secondary-text-color);">Query Command Template</label>
+                <p style="margin: 0 0 8px 0; font-size: 11px; color: var(--secondary-text-color);">
+                  Template to query current input. Use {output} as placeholder.<br>
+                  Example for OREI: <code>r av out {output}!</code>
+                </p>
+                <input type="text" id="query-template"
+                       value="${matrixDevice.query_template || ''}"
+                       placeholder="r av out {output}!"
+                       style="width: 100%; padding: 8px 12px; border: 1px solid var(--divider-color); border-radius: 4px; font-family: monospace;" />
               </div>
             </div>
 
@@ -2811,6 +2820,10 @@ class VDAIRControlCard extends HTMLElement {
     const routingTemplateInput = this.shadowRoot.getElementById('routing-template');
     const routingTemplate = routingTemplateInput?.value || '';
 
+    // Get query template
+    const queryTemplateInput = this.shadowRoot.getElementById('query-template');
+    const queryTemplate = queryTemplateInput?.value || '';
+
     try {
       const endpoint = deviceType === 'network'
         ? `/api/vda_ir_control/network_devices/${matrixDevice.device_id}`
@@ -2825,7 +2838,8 @@ class VDAIRControlCard extends HTMLElement {
         body: JSON.stringify({
           matrix_inputs: matrixInputs,
           matrix_outputs: matrixOutputs,
-          routing_template: routingTemplate
+          routing_template: routingTemplate,
+          query_template: queryTemplate
         })
       });
 
