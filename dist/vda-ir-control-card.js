@@ -4280,11 +4280,11 @@ class VDAIRControlCard extends HTMLElement {
         return;
       }
     } else {
-      deviceData.board_id = this.shadowRoot.getElementById('serial-device-board').value;
+      deviceData.bridge_board_id = this.shadowRoot.getElementById('serial-device-board').value;
       deviceData.uart_num = parseInt(this.shadowRoot.getElementById('serial-device-uart').value);
       deviceData.rx_pin = parseInt(this.shadowRoot.getElementById('serial-device-rx-pin').value);
       deviceData.tx_pin = parseInt(this.shadowRoot.getElementById('serial-device-tx-pin').value);
-      if (!deviceData.board_id) {
+      if (!deviceData.bridge_board_id) {
         alert('Please select an ESP32 board');
         return;
       }
