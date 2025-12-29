@@ -10,7 +10,9 @@ The Admin Card is your control center for:
 - **Port Configuration** - Set up GPIO pins for IR output and input
 - **Device Profiles** - Create and manage IR code profiles for your devices
 - **Controlled Devices** - Link physical devices (TVs, receivers, etc.) to board ports
+- **Serial Devices** - Configure RS-232/USB serial controlled devices
 - **Network Devices** - Configure HDMI matrices and other network-controllable devices
+- **Device Groups** - Create groups to control multiple devices together
 - **Community Profiles** - Sync and use IR profiles from the community repository
 
 ## Part of the VDA IR Control Ecosystem
@@ -30,7 +32,7 @@ This card is one component of the complete VDA IR Control system:
 ### Via HACS (Recommended)
 
 1. Open HACS
-2. Click ⋮ → **Custom repositories**
+2. Click the menu icon and select **Custom repositories**
 3. Add: `https://github.com/vda-solutions/vda-ir-control-admin-card`
 4. Type: **Dashboard**
 5. Click **Add**
@@ -53,22 +55,47 @@ Add the card to your dashboard:
 type: custom:vda-ir-control-card
 ```
 
-## Screenshots
+## Features
 
 ### Board Discovery & Configuration
-Discover ESP32 boards on your network and configure their GPIO ports.
+Discover ESP32 boards on your network and configure their GPIO ports for IR transmission and receiving.
 
 ### Device Management
-Create controlled devices by linking IR profiles to board outputs.
+Create controlled devices by linking IR profiles to board outputs. Support for IR, serial, and network devices.
+
+### Device Groups
+Create groups of devices (IR and serial) to control together. Configure sequence delays for sending commands to multiple devices.
 
 ### Profile Management
-View built-in profiles, sync community profiles, or create your own through IR learning.
+- **Community Profiles** - Sync profiles from the vda-ir-profiles repository
+- **Downloaded Profiles** - Browse and use synced profiles
+- **Custom Profiles** - Create your own profiles through IR learning
+
+### Built-in Remote Test
+Test IR commands directly from the admin card with a built-in remote interface featuring:
+- Power controls
+- Navigation D-pad
+- Volume and channel controls
+- Number pad
+- Playback controls
+- Input selection
+
+### SVG Icons
+All interface icons use crisp SVG graphics for optimal display at any resolution.
 
 ## Requirements
 
 - Home Assistant 2023.1 or newer
-- [VDA IR Control Integration](https://github.com/vda-solutions/vda-ir-control) installed
+- [VDA IR Control Integration](https://github.com/vda-solutions/vda-ir-control) v1.6.0 or newer
 - At least one [VDA IR Firmware](https://github.com/vda-solutions/vda-ir-firmware) board flashed and connected
+
+## Changelog
+
+### v1.6.0
+- Added Device Groups tab for creating and managing device groups
+- All icons converted to SVG for crisp display
+- Improved accordion navigation with SVG arrows
+- Enhanced remote test interface with SVG controls
 
 ## License
 

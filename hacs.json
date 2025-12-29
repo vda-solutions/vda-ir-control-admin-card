@@ -1,5 +1,6 @@
 {
   "name": "VDA IR Control Admin Card",
   "render_readme": true,
-  "filename": "vda-ir-control-card.js"
+  "filename": "vda-ir-control-card.js",
+  "version": "1.6.0"
 }

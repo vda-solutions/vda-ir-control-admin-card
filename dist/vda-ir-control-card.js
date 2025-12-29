@@ -33,6 +33,8 @@ class VDAIRControlCard extends HTMLElement {
     this._selectedSerialDevice = null;
     this._serialTestResult = null;
     this._availableSerialPorts = [];
+    // Device groups state
+    this._deviceGroups = [];
     // Accordion state for profile sections
     this._expandedSections = {
       community: false,
@@ -70,6 +72,7 @@ class VDAIRControlCard extends HTMLElement {
       this._loadDevices(),
       this._loadGPIOPins(),
       this._loadSerialDevices(),
+      this._loadDeviceGroups(),
     ]);
     this._render();
   }
@@ -413,6 +416,25 @@ class VDAIRControlCard extends HTMLElement {
     } catch (e) {
       console.error('Failed to load serial devices:', e);
       this._serialDevices = [];
+    }
+  }
+
+  async _loadDeviceGroups() {
+    try {
+      const resp = await fetch('/api/vda_ir_control/device_groups', {
+        headers: {
+          'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+        },
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        this._deviceGroups = data.groups || [];
+      } else {
+        this._deviceGroups = [];
+      }
+    } catch (e) {
+      console.error('Failed to load device groups:', e);
+      this._deviceGroups = [];
     }
   }
 
@@ -918,6 +940,9 @@ class VDAIRControlCard extends HTMLElement {
           <button class="tab ${this._activeTab === 'serial' ? 'active' : ''}" data-tab="serial">
             Serial
           </button>
+          <button class="tab ${this._activeTab === 'groups' ? 'active' : ''}" data-tab="groups">
+            Groups
+          </button>
         </div>
 
         <div class="content">
@@ -941,6 +966,8 @@ class VDAIRControlCard extends HTMLElement {
         return this._renderDevicesTab();
       case 'serial':
         return this._renderSerialTab();
+      case 'groups':
+        return this._renderGroupsTab();
       default:
         return '';
     }
@@ -1062,7 +1089,7 @@ class VDAIRControlCard extends HTMLElement {
         <div class="accordion-header" data-action="toggle-section" data-section="community"
              style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--secondary-background-color); cursor: pointer; user-select: none;">
           <div style="display: flex; align-items: center; gap: 12px;">
-            <span style="transition: transform 0.2s; transform: rotate(${this._expandedSections.community ? '90deg' : '0deg'});">▶</span>
+            <span style="transition: transform 0.2s; transform: rotate(${this._expandedSections.community ? '90deg' : '0deg'}); display: inline-flex;"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg></span>
             <span style="font-weight: 500;">Community Profiles</span>
             <span class="badge badge-info">${this._communityProfiles.length}</span>
           </div>
@@ -1107,7 +1134,7 @@ class VDAIRControlCard extends HTMLElement {
         <div class="accordion-header" data-action="toggle-section" data-section="builtin"
              style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--secondary-background-color); cursor: pointer; user-select: none;">
           <div style="display: flex; align-items: center; gap: 12px;">
-            <span style="transition: transform 0.2s; transform: rotate(${this._expandedSections.builtin ? '90deg' : '0deg'});">▶</span>
+            <span style="transition: transform 0.2s; transform: rotate(${this._expandedSections.builtin ? '90deg' : '0deg'}); display: inline-flex;"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg></span>
             <span style="font-weight: 500;">Downloaded Profiles</span>
             <span class="badge badge-success">${this._builtinProfiles.length}</span>
           </div>
@@ -1148,7 +1175,7 @@ class VDAIRControlCard extends HTMLElement {
         <div class="accordion-header" data-action="toggle-section" data-section="custom"
              style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--secondary-background-color); cursor: pointer; user-select: none;">
           <div style="display: flex; align-items: center; gap: 12px;">
-            <span style="transition: transform 0.2s; transform: rotate(${this._expandedSections.custom ? '90deg' : '0deg'});">▶</span>
+            <span style="transition: transform 0.2s; transform: rotate(${this._expandedSections.custom ? '90deg' : '0deg'}); display: inline-flex;"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg></span>
             <span style="font-weight: 500;">My Custom Profiles</span>
             <span class="badge badge-warning">${this._profiles.length}</span>
           </div>
@@ -1261,7 +1288,7 @@ class VDAIRControlCard extends HTMLElement {
 
         ${this._devices.length === 0 ? `
           <div class="empty-state">
-            <div class="empty-state-icon">📺</div>
+            <div class="empty-state-icon"><svg viewBox="0 0 24 24" width="40" height="40" fill="currentColor"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg></div>
             <p>No devices yet</p>
             <p style="font-size: 12px;">Create a device to link a profile to an IR output</p>
           </div>
@@ -1411,6 +1438,51 @@ class VDAIRControlCard extends HTMLElement {
     `;
   }
 
+  _renderGroupsTab() {
+    return `
+      <div class="section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <div class="section-title" style="margin-bottom: 0;">Device Groups</div>
+          <button class="btn btn-primary btn-small" data-action="create-group">
+            + Add Group
+          </button>
+        </div>
+        <p style="font-size: 12px; color: var(--secondary-text-color); margin-bottom: 12px;">
+          Create groups of devices to control with a single power button
+        </p>
+
+        ${this._deviceGroups.length === 0 ? `
+          <div class="empty-state">
+            <div class="empty-state-icon">📦</div>
+            <p>No device groups</p>
+            <p style="font-size: 12px;">Create groups to control multiple devices with one button</p>
+          </div>
+        ` : this._deviceGroups.map(group => `
+          <div class="list-item" data-group-id="${group.group_id}">
+            <div class="list-item-content">
+              <div class="list-item-title">
+                ${group.name}
+                ${group.location ? `<span class="badge badge-warning">${group.location}</span>` : ''}
+                <span class="badge badge-info">${group.members?.length || 0} devices</span>
+              </div>
+              <div class="list-item-subtitle">
+                Delay: ${group.sequence_delay_ms || 20}ms between commands
+              </div>
+            </div>
+            <div class="list-item-actions">
+              <button class="btn btn-secondary btn-small" data-action="edit-group" data-group-id="${group.group_id}">
+                Edit
+              </button>
+              <button class="btn btn-danger btn-small" data-action="delete-group" data-group-id="${group.group_id}">
+                Delete
+              </button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
   _renderModal() {
     if (!this._modal) return '';
 
@@ -1437,6 +1509,9 @@ class VDAIRControlCard extends HTMLElement {
         return this._renderEditMatrixIOModal();
       case 'edit-device':
         return this._renderEditDeviceModal();
+      case 'create-group':
+      case 'edit-group':
+        return this._renderGroupModal();
       default:
         return '';
     }
@@ -1773,7 +1848,7 @@ class VDAIRControlCard extends HTMLElement {
                 <div style="display: flex; justify-content: center; gap: 8px; flex-wrap: wrap;">
                   ${powerCmds.map(cmd => `
                     <button class="remote-btn power" data-action="send-remote-cmd" data-command="${cmd}">
-                      ${cmd === 'power' ? '⏻' : cmd === 'power_on' ? '⏻ On' : cmd === 'power_off' ? '⏻ Off' : this._formatCommand(cmd)}
+                      ${cmd === 'power' ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.58-5.42L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z"/></svg>' : cmd === 'power_on' ? '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.58-5.42L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z"/></svg> On' : cmd === 'power_off' ? '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.58-5.42L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z"/></svg> Off' : this._formatCommand(cmd)}
                     </button>
                   `).join('')}
                 </div>
@@ -1785,13 +1860,13 @@ class VDAIRControlCard extends HTMLElement {
               <div class="remote-section">
                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; max-width: 180px; margin: 0 auto;">
                   <div></div>
-                  ${navCmds.includes('up') ? `<button class="remote-btn nav" data-action="send-remote-cmd" data-command="up">▲</button>` : '<div></div>'}
+                  ${navCmds.includes('up') ? `<button class="remote-btn nav" data-action="send-remote-cmd" data-command="up"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg></button>` : '<div></div>'}
                   <div></div>
-                  ${navCmds.includes('left') ? `<button class="remote-btn nav" data-action="send-remote-cmd" data-command="left">◀</button>` : '<div></div>'}
+                  ${navCmds.includes('left') ? `<button class="remote-btn nav" data-action="send-remote-cmd" data-command="left"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg></button>` : '<div></div>'}
                   ${navCmds.includes('select') || navCmds.includes('enter') ? `<button class="remote-btn nav ok" data-action="send-remote-cmd" data-command="${navCmds.includes('select') ? 'select' : 'enter'}">OK</button>` : '<div></div>'}
-                  ${navCmds.includes('right') ? `<button class="remote-btn nav" data-action="send-remote-cmd" data-command="right">▶</button>` : '<div></div>'}
+                  ${navCmds.includes('right') ? `<button class="remote-btn nav" data-action="send-remote-cmd" data-command="right"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg></button>` : '<div></div>'}
                   <div></div>
-                  ${navCmds.includes('down') ? `<button class="remote-btn nav" data-action="send-remote-cmd" data-command="down">▼</button>` : '<div></div>'}
+                  ${navCmds.includes('down') ? `<button class="remote-btn nav" data-action="send-remote-cmd" data-command="down"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg></button>` : '<div></div>'}
                   <div></div>
                 </div>
                 <div style="display: flex; justify-content: center; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
@@ -1809,15 +1884,15 @@ class VDAIRControlCard extends HTMLElement {
                   <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
                     <span style="font-size: 11px; color: var(--secondary-text-color);">Volume</span>
                     ${volCmds.includes('volume_up') ? `<button class="remote-btn vol" data-action="send-remote-cmd" data-command="volume_up">+</button>` : ''}
-                    ${volCmds.includes('mute') ? `<button class="remote-btn vol mute" data-action="send-remote-cmd" data-command="mute">🔇</button>` : ''}
+                    ${volCmds.includes('mute') ? `<button class="remote-btn vol mute" data-action="send-remote-cmd" data-command="mute"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg></button>` : ''}
                     ${volCmds.includes('volume_down') ? `<button class="remote-btn vol" data-action="send-remote-cmd" data-command="volume_down">−</button>` : ''}
                   </div>
                 ` : ''}
                 ${chanCmds.length > 0 ? `
                   <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
                     <span style="font-size: 11px; color: var(--secondary-text-color);">Channel</span>
-                    ${chanCmds.includes('channel_up') ? `<button class="remote-btn chan" data-action="send-remote-cmd" data-command="channel_up">▲</button>` : ''}
-                    ${chanCmds.includes('channel_down') ? `<button class="remote-btn chan" data-action="send-remote-cmd" data-command="channel_down">▼</button>` : ''}
+                    ${chanCmds.includes('channel_up') ? `<button class="remote-btn chan" data-action="send-remote-cmd" data-command="channel_up"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg></button>` : ''}
+                    ${chanCmds.includes('channel_down') ? `<button class="remote-btn chan" data-action="send-remote-cmd" data-command="channel_down"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg></button>` : ''}
                   </div>
                 ` : ''}
               </div>
@@ -1852,13 +1927,13 @@ class VDAIRControlCard extends HTMLElement {
             ${playCmds.length > 0 ? `
               <div class="remote-section">
                 <div style="display: flex; justify-content: center; gap: 6px; flex-wrap: wrap;">
-                  ${playCmds.includes('rewind') ? `<button class="remote-btn play" data-action="send-remote-cmd" data-command="rewind">⏪</button>` : ''}
-                  ${playCmds.includes('play') ? `<button class="remote-btn play" data-action="send-remote-cmd" data-command="play">▶</button>` : ''}
-                  ${playCmds.includes('play_pause') ? `<button class="remote-btn play" data-action="send-remote-cmd" data-command="play_pause">⏯</button>` : ''}
-                  ${playCmds.includes('pause') ? `<button class="remote-btn play" data-action="send-remote-cmd" data-command="pause">⏸</button>` : ''}
-                  ${playCmds.includes('stop') ? `<button class="remote-btn play" data-action="send-remote-cmd" data-command="stop">⏹</button>` : ''}
-                  ${playCmds.includes('fast_forward') ? `<button class="remote-btn play" data-action="send-remote-cmd" data-command="fast_forward">⏩</button>` : ''}
-                  ${playCmds.includes('record') ? `<button class="remote-btn play record" data-action="send-remote-cmd" data-command="record">⏺</button>` : ''}
+                  ${playCmds.includes('rewind') ? `<button class="remote-btn play" data-action="send-remote-cmd" data-command="rewind"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z"/></svg></button>` : ''}
+                  ${playCmds.includes('play') ? `<button class="remote-btn play" data-action="send-remote-cmd" data-command="play"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>` : ''}
+                  ${playCmds.includes('play_pause') ? `<button class="remote-btn play" data-action="send-remote-cmd" data-command="play_pause"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>` : ''}
+                  ${playCmds.includes('pause') ? `<button class="remote-btn play" data-action="send-remote-cmd" data-command="pause"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg></button>` : ''}
+                  ${playCmds.includes('stop') ? `<button class="remote-btn play" data-action="send-remote-cmd" data-command="stop"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 6h12v12H6z"/></svg></button>` : ''}
+                  ${playCmds.includes('fast_forward') ? `<button class="remote-btn play" data-action="send-remote-cmd" data-command="fast_forward"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg></button>` : ''}
+                  ${playCmds.includes('record') ? `<button class="remote-btn play record" data-action="send-remote-cmd" data-command="record"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="12" cy="12" r="8"/></svg></button>` : ''}
                 </div>
               </div>
             ` : ''}
@@ -3032,6 +3107,71 @@ class VDAIRControlCard extends HTMLElement {
     `;
   }
 
+  _renderGroupModal() {
+    const isEdit = this._modal.type === 'edit-group';
+    const group = this._modal.group || {};
+
+    // Get all available devices (IR devices + serial devices)
+    const allDevices = [
+      ...this._devices.map(d => ({ id: d.device_id, name: d.name, type: 'controlled', location: d.location })),
+      ...this._serialDevices.map(d => ({ id: d.device_id, name: d.name, type: 'serial', location: d.location })),
+    ];
+
+    const members = group.members || [];
+    const memberIds = members.map(m => m.device_id);
+
+    return `
+      <div class="modal" data-action="close-modal">
+        <div class="modal-content" onclick="event.stopPropagation()">
+          <div class="modal-title">${isEdit ? 'Edit Device Group' : 'Create Device Group'}</div>
+
+          <div class="form-group">
+            <label>Group Name</label>
+            <input type="text" id="group-name" value="${group.name || ''}" placeholder="e.g., All Bar TVs">
+          </div>
+
+          <div class="form-group">
+            <label>Location (Optional)</label>
+            <input type="text" id="group-location" value="${group.location || ''}" placeholder="e.g., Bar Area">
+          </div>
+
+          <div class="form-group">
+            <label>Sequence Delay (ms)</label>
+            <input type="number" id="group-delay" value="${group.sequence_delay_ms || 20}" min="0" max="5000" placeholder="20">
+            <small>Delay between power commands to each device</small>
+          </div>
+
+          <div class="form-group">
+            <label>Devices in Group</label>
+            <div style="max-height: 200px; overflow-y: auto; border: 1px solid var(--divider-color, #e0e0e0); border-radius: 8px; padding: 8px;">
+              ${allDevices.length === 0 ? `
+                <p style="color: var(--secondary-text-color); font-size: 12px; margin: 0;">No devices available</p>
+              ` : allDevices.map(device => `
+                <div style="padding: 8px 4px; border-bottom: 1px solid var(--divider-color, #eee);">
+                  <label style="display: block; cursor: pointer;">
+                    <input type="checkbox" class="group-device-checkbox"
+                           data-device-id="${device.id}"
+                           data-device-type="${device.type}"
+                           ${memberIds.includes(device.id) ? 'checked' : ''}
+                           style="margin-right: 8px; vertical-align: middle;">
+                    <span style="vertical-align: middle; color: var(--primary-text-color);">${device.name}</span>
+                    <span class="badge badge-info" style="font-size: 10px; margin-left: 8px; vertical-align: middle;">${device.type === 'controlled' ? 'IR' : 'Serial'}</span>
+                    ${device.location ? `<span class="badge badge-warning" style="font-size: 10px; margin-left: 4px; vertical-align: middle;">${device.location}</span>` : ''}
+                  </label>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button class="btn btn-secondary" data-action="close-modal">Cancel</button>
+            <button class="btn btn-primary" data-action="save-group">${isEdit ? 'Save Changes' : 'Create Group'}</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   async _openEditDeviceModal(deviceId) {
     const device = this._devices.find(d => d.device_id === deviceId);
     if (!device) {
@@ -3674,6 +3814,31 @@ class VDAIRControlCard extends HTMLElement {
       case 'test-serial-device':
         e.stopPropagation();
         await this._testSerialDevice(e.target.closest('[data-device-id]').dataset.deviceId);
+        break;
+
+      // Device group actions
+      case 'create-group':
+        this._modal = { type: 'create-group' };
+        this._render();
+        break;
+
+      case 'edit-group':
+        const groupId = e.target.closest('[data-group-id]').dataset.groupId;
+        const groupToEdit = this._deviceGroups.find(g => g.group_id === groupId);
+        if (groupToEdit) {
+          this._modal = { type: 'edit-group', group: groupToEdit };
+          this._render();
+        }
+        break;
+
+      case 'delete-group':
+        if (confirm('Delete this device group?')) {
+          await this._deleteDeviceGroup(e.target.closest('[data-group-id]').dataset.groupId);
+        }
+        break;
+
+      case 'save-group':
+        await this._saveDeviceGroup();
         break;
     }
   }
@@ -4460,6 +4625,89 @@ class VDAIRControlCard extends HTMLElement {
     } catch (e) {
       console.error('Failed to delete serial device:', e);
       alert('Failed to delete device');
+    }
+  }
+
+  async _saveDeviceGroup() {
+    const name = this.shadowRoot.getElementById('group-name').value.trim();
+    const location = this.shadowRoot.getElementById('group-location').value.trim();
+    const delay = parseInt(this.shadowRoot.getElementById('group-delay').value) || 20;
+
+    if (!name) {
+      alert('Please enter a group name');
+      return;
+    }
+
+    // Collect selected devices
+    const checkboxes = this.shadowRoot.querySelectorAll('.group-device-checkbox:checked');
+    const members = Array.from(checkboxes).map(cb => ({
+      device_id: cb.dataset.deviceId,
+      device_type: cb.dataset.deviceType,
+    }));
+
+    if (members.length === 0) {
+      alert('Please select at least one device for the group');
+      return;
+    }
+
+    const isEdit = this._modal.type === 'edit-group';
+    const groupId = isEdit ? this._modal.group.group_id : name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+
+    const groupData = {
+      group_id: groupId,
+      name,
+      location,
+      sequence_delay_ms: delay,
+      members,
+    };
+
+    try {
+      const url = isEdit
+        ? `/api/vda_ir_control/device_groups/${groupId}`
+        : '/api/vda_ir_control/device_groups';
+      const method = isEdit ? 'PUT' : 'POST';
+
+      const resp = await fetch(url, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(groupData),
+      });
+
+      if (resp.ok) {
+        this._modal = null;
+        await this._loadDeviceGroups();
+        this._render();
+      } else {
+        const error = await resp.json();
+        alert('Failed to save group: ' + (error.error || 'Unknown error'));
+      }
+    } catch (e) {
+      console.error('Failed to save device group:', e);
+      alert('Failed to save group');
+    }
+  }
+
+  async _deleteDeviceGroup(groupId) {
+    try {
+      const resp = await fetch(`/api/vda_ir_control/device_groups/${groupId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+        },
+      });
+
+      if (resp.ok) {
+        await this._loadDeviceGroups();
+        this._render();
+      } else {
+        alert('Failed to delete group');
+      }
+    } catch (e) {
+      console.error('Failed to delete device group:', e);
+      alert('Failed to delete group');
     }
   }
 
