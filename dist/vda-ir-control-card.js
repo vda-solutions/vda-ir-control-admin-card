@@ -3357,11 +3357,26 @@ class VDAIRControlCard extends HTMLElement {
           </div>
 
           <div class="form-group">
-            <label>Entity ID</label>
-            <input type="text" id="ha-entity-id" value="${device.entity_id || ''}" placeholder="e.g., remote.living_room_apple_tv">
-            <small style="color: var(--secondary-text-color); font-size: 11px;">
-              The Home Assistant entity (remote.* or media_player.*) that controls this device
-            </small>
+            <label>Entity</label>
+            <select id="ha-entity-id">
+              <option value="">Select entity...</option>
+              ${this._haEntities.length > 0 ? `
+                ${this._haEntities.filter(e => e.domain === 'remote').length > 0 ? `
+                  <optgroup label="Remote">
+                    ${this._haEntities.filter(e => e.domain === 'remote').map(e => `
+                      <option value="${e.entity_id}" ${device.entity_id === e.entity_id ? 'selected' : ''}>${e.name} (${e.entity_id})</option>
+                    `).join('')}
+                  </optgroup>
+                ` : ''}
+                ${this._haEntities.filter(e => e.domain === 'media_player').length > 0 ? `
+                  <optgroup label="Media Player">
+                    ${this._haEntities.filter(e => e.domain === 'media_player').map(e => `
+                      <option value="${e.entity_id}" ${device.entity_id === e.entity_id ? 'selected' : ''}>${e.name} (${e.entity_id})</option>
+                    `).join('')}
+                  </optgroup>
+                ` : ''}
+              ` : '<option value="" disabled>No entities found</option>'}
+            </select>
           </div>
 
           <div class="form-group">
@@ -4091,6 +4106,7 @@ class VDAIRControlCard extends HTMLElement {
         const haDevice = this._haDevices.find(d => d.device_id === haDeviceId);
         if (haDevice) {
           this._modal = { type: 'edit-ha-device', device: haDevice };
+          await this._loadHAEntities();
           this._render();
         }
         break;
