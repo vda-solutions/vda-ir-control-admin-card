@@ -2717,16 +2717,26 @@ class VDAIRControlCard extends HTMLElement {
           }));
         }
 
+        // Merge linked devices into matrix inputs
+        if (matrixDevice.matrix_inputs) {
+          matrixDevice.matrix_inputs = matrixDevice.matrix_inputs.map(input => {
+            const linkedDevice = linkedDevices.find(d =>
+              d.matrix_port_type === 'input' && String(d.matrix_port) === String(input.index)
+            );
+            if (linkedDevice) {
+              return { ...input, device_id: linkedDevice.device_id };
+            }
+            return input;
+          });
+        }
+
         // Merge linked devices into matrix outputs
-        // If a controlled device is linked to an output, set that output's device_id
         if (matrixDevice.matrix_outputs) {
           matrixDevice.matrix_outputs = matrixDevice.matrix_outputs.map(output => {
-            // Check if any controlled device is linked to this output
             const linkedDevice = linkedDevices.find(d =>
-              String(d.matrix_output) === String(output.index)
+              d.matrix_port_type === 'output' && String(d.matrix_port) === String(output.index)
             );
-            if (linkedDevice && !output.device_id) {
-              // Use the linked device's ID for this output
+            if (linkedDevice) {
               return { ...output, device_id: linkedDevice.device_id };
             }
             return output;
@@ -2795,6 +2805,35 @@ class VDAIRControlCard extends HTMLElement {
       });
 
       if (resp.ok) {
+        // Sync controlled devices with matrix I/O assignments
+        const linkedDevices = this._modal?.linkedDevices || [];
+
+        // Update devices assigned to inputs
+        for (const input of matrixInputs) {
+          if (input.device_id) {
+            // Update the device to link to this matrix input
+            await this._updateDeviceMatrixLink(input.device_id, matrixDevice.device_id, deviceType, 'input', String(input.index));
+          }
+        }
+
+        // Update devices assigned to outputs
+        for (const output of matrixOutputs) {
+          if (output.device_id) {
+            // Update the device to link to this matrix output
+            await this._updateDeviceMatrixLink(output.device_id, matrixDevice.device_id, deviceType, 'output', String(output.index));
+          }
+        }
+
+        // Clear matrix link for devices that were unassigned
+        for (const linkedDevice of linkedDevices) {
+          const stillAssignedInput = matrixInputs.find(i => i.device_id === linkedDevice.device_id);
+          const stillAssignedOutput = matrixOutputs.find(o => o.device_id === linkedDevice.device_id);
+          if (!stillAssignedInput && !stillAssignedOutput) {
+            // Device was unassigned, clear its matrix link
+            await this._updateDeviceMatrixLink(linkedDevice.device_id, null, null, null, null);
+          }
+        }
+
         this._modal = null;
         // Reload devices to reflect changes
         if (deviceType === 'network') {
@@ -2802,6 +2841,7 @@ class VDAIRControlCard extends HTMLElement {
         } else {
           await this._loadSerialDevices();
         }
+        await this._loadDevices();
         this._render();
       } else {
         const err = await resp.json();
@@ -2810,6 +2850,20 @@ class VDAIRControlCard extends HTMLElement {
     } catch (e) {
       console.error('Failed to save matrix I/O:', e);
       alert('Failed to save matrix I/O configuration');
+    }
+  }
+
+  async _updateDeviceMatrixLink(deviceId, matrixDeviceId, matrixDeviceType, portType, port) {
+    try {
+      await this._hass.callService('vda_ir_control', 'update_device', {
+        device_id: deviceId,
+        matrix_device_id: matrixDeviceId,
+        matrix_device_type: matrixDeviceType,
+        matrix_port_type: portType,
+        matrix_port: port
+      });
+    } catch (e) {
+      console.error(`Failed to update device ${deviceId} matrix link:`, e);
     }
   }
 
