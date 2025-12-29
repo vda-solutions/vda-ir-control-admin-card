@@ -2637,8 +2637,12 @@ class VDAIRControlCard extends HTMLElement {
                 ${matrixInputs.length === 0 ? `
                   <p style="color: var(--secondary-text-color); font-size: 12px;">No inputs configured for this matrix.</p>
                 ` : matrixInputs.map((input, idx) => `
-                  <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-                    <span style="min-width: 80px; font-size: 13px;">Input ${input.index}:</span>
+                  <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px; ${input.enabled === false ? 'opacity: 0.5;' : ''}">
+                    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;" title="Enable/disable this input">
+                      <input type="checkbox" class="matrix-input-enabled" data-index="${input.index}"
+                             ${input.enabled !== false ? 'checked' : ''} />
+                    </label>
+                    <span style="min-width: 60px; font-size: 13px;">Input ${input.index}:</span>
                     <input type="text" class="matrix-input-name-edit" data-index="${input.index}"
                            value="${input.name || ''}" placeholder="Input ${input.index} name"
                            style="flex: 1; padding: 6px 10px; border: 1px solid var(--divider-color); border-radius: 4px;" />
@@ -2782,10 +2786,12 @@ class VDAIRControlCard extends HTMLElement {
     this.shadowRoot.querySelectorAll('.matrix-input-device').forEach(select => {
       const index = parseInt(select.dataset.index);
       const nameInput = this.shadowRoot.querySelector(`.matrix-input-name-edit[data-index="${index}"]`);
+      const enabledCheckbox = this.shadowRoot.querySelector(`.matrix-input-enabled[data-index="${index}"]`);
       matrixInputs.push({
         index: index,
         name: nameInput?.value || '',
-        device_id: select.value || null
+        device_id: select.value || null,
+        enabled: enabledCheckbox?.checked !== false
       });
     });
 
