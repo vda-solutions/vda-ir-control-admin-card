@@ -2701,6 +2701,22 @@ class VDAIRControlCard extends HTMLElement {
           );
         }
 
+        // Auto-populate with defaults if empty (8 inputs/outputs for typical matrix)
+        if (!matrixDevice.matrix_inputs || matrixDevice.matrix_inputs.length === 0) {
+          matrixDevice.matrix_inputs = Array.from({length: 8}, (_, i) => ({
+            index: i + 1,
+            name: `Input ${i + 1}`,
+            device_id: null
+          }));
+        }
+        if (!matrixDevice.matrix_outputs || matrixDevice.matrix_outputs.length === 0) {
+          matrixDevice.matrix_outputs = Array.from({length: 8}, (_, i) => ({
+            index: i + 1,
+            name: `Output ${i + 1}`,
+            device_id: null
+          }));
+        }
+
         // Merge linked devices into matrix outputs
         // If a controlled device is linked to an output, set that output's device_id
         if (matrixDevice.matrix_outputs) {
