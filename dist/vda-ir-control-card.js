@@ -35,6 +35,10 @@ class VDAIRControlCard extends HTMLElement {
     this._availableSerialPorts = [];
     // Device groups state
     this._deviceGroups = [];
+    // HA remote devices state
+    this._haDevices = [];
+    this._haDeviceFamilies = {};
+    this._haEntities = [];
     // Accordion state for profile sections
     this._expandedSections = {
       community: false,
@@ -73,6 +77,8 @@ class VDAIRControlCard extends HTMLElement {
       this._loadGPIOPins(),
       this._loadSerialDevices(),
       this._loadDeviceGroups(),
+      this._loadHADevices(),
+      this._loadHADeviceFamilies(),
     ]);
     this._render();
   }
@@ -435,6 +441,63 @@ class VDAIRControlCard extends HTMLElement {
     } catch (e) {
       console.error('Failed to load device groups:', e);
       this._deviceGroups = [];
+    }
+  }
+
+  async _loadHADevices() {
+    try {
+      const resp = await fetch('/api/vda_ir_control/ha_devices', {
+        headers: {
+          'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+        },
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        this._haDevices = data.devices || [];
+      } else {
+        this._haDevices = [];
+      }
+    } catch (e) {
+      console.error('Failed to load HA devices:', e);
+      this._haDevices = [];
+    }
+  }
+
+  async _loadHADeviceFamilies() {
+    try {
+      const resp = await fetch('/api/vda_ir_control/ha_device_families', {
+        headers: {
+          'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+        },
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        this._haDeviceFamilies = data.families || {};
+      } else {
+        this._haDeviceFamilies = {};
+      }
+    } catch (e) {
+      console.error('Failed to load HA device families:', e);
+      this._haDeviceFamilies = {};
+    }
+  }
+
+  async _loadHAEntities() {
+    try {
+      const resp = await fetch('/api/vda_ir_control/ha_entities', {
+        headers: {
+          'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+        },
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        this._haEntities = data.entities || [];
+      } else {
+        this._haEntities = [];
+      }
+    } catch (e) {
+      console.error('Failed to load HA entities:', e);
+      this._haEntities = [];
     }
   }
 
@@ -943,6 +1006,9 @@ class VDAIRControlCard extends HTMLElement {
           <button class="tab ${this._activeTab === 'groups' ? 'active' : ''}" data-tab="groups">
             Groups
           </button>
+          <button class="tab ${this._activeTab === 'hadevices' ? 'active' : ''}" data-tab="hadevices">
+            HA Devices
+          </button>
         </div>
 
         <div class="content">
@@ -968,6 +1034,8 @@ class VDAIRControlCard extends HTMLElement {
         return this._renderSerialTab();
       case 'groups':
         return this._renderGroupsTab();
+      case 'hadevices':
+        return this._renderHADevicesTab();
       default:
         return '';
     }
@@ -1483,6 +1551,66 @@ class VDAIRControlCard extends HTMLElement {
     `;
   }
 
+  _renderHADevicesTab() {
+    const familyLabels = {
+      'apple_tv': 'Apple TV',
+      'roku': 'Roku',
+      'android_tv': 'Android TV',
+      'fire_tv': 'Fire TV',
+      'chromecast': 'Chromecast',
+      'nvidia_shield': 'NVIDIA Shield',
+      'custom': 'Custom',
+    };
+
+    return `
+      <div class="section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <div class="section-title" style="margin-bottom: 0;">Home Assistant Devices</div>
+          <button class="btn btn-primary btn-small" data-action="create-ha-device">
+            + Add HA Device
+          </button>
+        </div>
+        <p style="font-size: 12px; color: var(--secondary-text-color); margin-bottom: 12px;">
+          Add network streaming devices controlled by Home Assistant (Apple TV, Roku, etc.)
+        </p>
+
+        ${this._haDevices.length === 0 ? `
+          <div class="empty-state">
+            <div class="empty-state-icon"><svg viewBox="0 0 24 24" width="40" height="40" fill="currentColor"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg></div>
+            <p>No HA devices configured</p>
+            <p style="font-size: 12px;">Add devices like Apple TV, Roku, or Android TV that are already in Home Assistant</p>
+          </div>
+        ` : this._haDevices.map(device => `
+          <div class="list-item" data-device-id="${device.device_id}">
+            <div class="list-item-content">
+              <div class="list-item-title">
+                ${device.name}
+                <span class="badge badge-info">${familyLabels[device.device_family] || device.device_family}</span>
+                ${device.location ? `<span class="badge badge-warning">${device.location}</span>` : ''}
+                ${device.matrix_device_id ? `<span class="badge badge-success">Matrix Linked</span>` : ''}
+              </div>
+              <div class="list-item-subtitle">
+                Entity: ${device.entity_id}
+                ${device.matrix_device_id ? ` • Matrix: ${device.matrix_port || 'Unknown port'}` : ''}
+              </div>
+            </div>
+            <div class="list-item-actions">
+              <button class="btn btn-secondary btn-small" data-action="test-ha-device" data-device-id="${device.device_id}">
+                Test
+              </button>
+              <button class="btn btn-secondary btn-small" data-action="edit-ha-device" data-device-id="${device.device_id}">
+                Edit
+              </button>
+              <button class="btn btn-danger btn-small" data-action="delete-ha-device" data-device-id="${device.device_id}">
+                Delete
+              </button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
   _renderModal() {
     if (!this._modal) return '';
 
@@ -1512,6 +1640,9 @@ class VDAIRControlCard extends HTMLElement {
       case 'create-group':
       case 'edit-group':
         return this._renderGroupModal();
+      case 'create-ha-device':
+      case 'edit-ha-device':
+        return this._renderHADeviceModal();
       default:
         return '';
     }
@@ -3172,6 +3303,113 @@ class VDAIRControlCard extends HTMLElement {
     `;
   }
 
+  _renderHADeviceModal() {
+    const isEdit = this._modal.type === 'edit-ha-device';
+    const device = this._modal.device || {};
+
+    const familyOptions = [
+      { value: 'apple_tv', label: 'Apple TV' },
+      { value: 'roku', label: 'Roku' },
+      { value: 'android_tv', label: 'Android TV' },
+      { value: 'fire_tv', label: 'Fire TV' },
+      { value: 'chromecast', label: 'Chromecast' },
+      { value: 'nvidia_shield', label: 'NVIDIA Shield' },
+      { value: 'custom', label: 'Custom' },
+    ];
+
+    // Get all matrix devices for linking
+    const matrixDevices = [
+      ...this._serialDevices.filter(d => d.device_type === 'hdmi_matrix').map(d => ({
+        id: d.device_id,
+        name: d.name,
+        type: 'serial',
+        inputs: d.matrix_inputs || [],
+        outputs: d.matrix_outputs || [],
+      })),
+    ];
+
+    const hasMatrix = device.matrix_device_id ? true : false;
+
+    return `
+      <div class="modal" data-action="close-modal">
+        <div class="modal-content" onclick="event.stopPropagation()">
+          <div class="modal-title">${isEdit ? 'Edit HA Device' : 'Add HA Device'}</div>
+
+          ${!isEdit ? `
+            <div class="form-group">
+              <label>Device ID</label>
+              <input type="text" id="ha-device-id" placeholder="e.g., living_room_apple_tv">
+            </div>
+          ` : ''}
+
+          <div class="form-group">
+            <label>Device Name</label>
+            <input type="text" id="ha-device-name" value="${device.name || ''}" placeholder="e.g., Living Room Apple TV">
+          </div>
+
+          <div class="form-group">
+            <label>Device Family</label>
+            <select id="ha-device-family">
+              ${familyOptions.map(opt => `
+                <option value="${opt.value}" ${device.device_family === opt.value ? 'selected' : ''}>${opt.label}</option>
+              `).join('')}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Entity ID</label>
+            <input type="text" id="ha-entity-id" value="${device.entity_id || ''}" placeholder="e.g., remote.living_room_apple_tv">
+            <small style="color: var(--secondary-text-color); font-size: 11px;">
+              The Home Assistant entity (remote.* or media_player.*) that controls this device
+            </small>
+          </div>
+
+          <div class="form-group">
+            <label>Location</label>
+            <input type="text" id="ha-device-location" value="${device.location || ''}" placeholder="e.g., Living Room">
+          </div>
+
+          ${matrixDevices.length > 0 ? `
+            <div class="form-group" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--divider-color, #e0e0e0);">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="ha-link-to-matrix" ${hasMatrix ? 'checked' : ''} data-action="toggle-ha-matrix-link">
+                Link to Matrix as Input Source
+              </label>
+            </div>
+
+            <div id="ha-matrix-link-options" style="display: ${hasMatrix ? 'block' : 'none'};">
+              <div class="form-group">
+                <label>Matrix Device</label>
+                <select id="ha-matrix-device-id" data-action="ha-matrix-device-changed">
+                  <option value="">Select Matrix...</option>
+                  ${matrixDevices.map(m => `
+                    <option value="${m.id}" data-type="${m.type}" ${device.matrix_device_id === m.id ? 'selected' : ''}>${m.name}</option>
+                  `).join('')}
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Input Port</label>
+                <select id="ha-matrix-port">
+                  <option value="">Select Input...</option>
+                  ${device.matrix_device_id && matrixDevices.find(m => m.id === device.matrix_device_id) ?
+                    matrixDevices.find(m => m.id === device.matrix_device_id).inputs.map(i => `
+                      <option value="${i.index}" ${String(device.matrix_port) === String(i.index) ? 'selected' : ''}>${i.name || 'Input ' + i.index}</option>
+                    `).join('') : ''}
+                </select>
+              </div>
+            </div>
+          ` : ''}
+
+          <div class="modal-actions">
+            <button class="btn btn-secondary" data-action="close-modal">Cancel</button>
+            <button class="btn btn-primary" data-action="save-ha-device">${isEdit ? 'Save Changes' : 'Add Device'}</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   async _openEditDeviceModal(deviceId) {
     const device = this._devices.find(d => d.device_id === deviceId);
     if (!device) {
@@ -3839,6 +4077,47 @@ class VDAIRControlCard extends HTMLElement {
 
       case 'save-group':
         await this._saveDeviceGroup();
+        break;
+
+      // HA device actions
+      case 'create-ha-device':
+        this._modal = { type: 'create-ha-device' };
+        await this._loadHAEntities();
+        this._render();
+        break;
+
+      case 'edit-ha-device':
+        const haDeviceId = e.target.closest('[data-device-id]').dataset.deviceId;
+        const haDevice = this._haDevices.find(d => d.device_id === haDeviceId);
+        if (haDevice) {
+          this._modal = { type: 'edit-ha-device', device: haDevice };
+          this._render();
+        }
+        break;
+
+      case 'delete-ha-device':
+        if (confirm('Delete this HA device?')) {
+          await this._deleteHADevice(e.target.closest('[data-device-id]').dataset.deviceId);
+        }
+        break;
+
+      case 'save-ha-device':
+        await this._saveHADevice();
+        break;
+
+      case 'test-ha-device':
+        await this._testHADevice(e.target.closest('[data-device-id]').dataset.deviceId);
+        break;
+
+      case 'toggle-ha-matrix-link':
+        const haMatrixOptions = this.shadowRoot.getElementById('ha-matrix-link-options');
+        if (haMatrixOptions) {
+          haMatrixOptions.style.display = e.target.checked ? 'block' : 'none';
+        }
+        break;
+
+      case 'ha-matrix-device-changed':
+        await this._updateHAMatrixPortOptions(e.target.value);
         break;
     }
   }
@@ -4873,6 +5152,135 @@ class VDAIRControlCard extends HTMLElement {
         message: 'Test failed: ' + e.message,
       };
       this._render();
+    }
+  }
+
+  // HA Device methods
+  async _saveHADevice() {
+    const isEdit = this._modal.type === 'edit-ha-device';
+    const deviceId = isEdit ? this._modal.device.device_id : this.shadowRoot.getElementById('ha-device-id')?.value;
+    const name = this.shadowRoot.getElementById('ha-device-name').value;
+    const deviceFamily = this.shadowRoot.getElementById('ha-device-family').value;
+    const entityId = this.shadowRoot.getElementById('ha-entity-id').value;
+    const location = this.shadowRoot.getElementById('ha-device-location').value;
+
+    // Matrix linking
+    const linkToMatrix = this.shadowRoot.getElementById('ha-link-to-matrix')?.checked;
+    const matrixDeviceId = linkToMatrix ? this.shadowRoot.getElementById('ha-matrix-device-id')?.value : null;
+    const matrixPort = linkToMatrix ? this.shadowRoot.getElementById('ha-matrix-port')?.value : null;
+
+    if (!deviceId || !name || !entityId) {
+      alert('Please fill in Device ID, Name, and Entity ID');
+      return;
+    }
+
+    try {
+      const payload = {
+        device_id: deviceId,
+        name,
+        device_family: deviceFamily,
+        entity_id: entityId,
+        location,
+        matrix_device_id: matrixDeviceId || null,
+        matrix_device_type: matrixDeviceId ? 'serial' : null,
+        matrix_port: matrixPort || null,
+      };
+
+      const method = isEdit ? 'PUT' : 'POST';
+      const url = isEdit
+        ? `/api/vda_ir_control/ha_devices/${deviceId}`
+        : '/api/vda_ir_control/ha_devices';
+
+      const resp = await fetch(url, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (resp.ok) {
+        this._modal = null;
+        await this._loadHADevices();
+        this._render();
+      } else {
+        const error = await resp.json();
+        alert('Failed to save HA device: ' + (error.error || 'Unknown error'));
+      }
+    } catch (e) {
+      console.error('Failed to save HA device:', e);
+      alert('Failed to save HA device');
+    }
+  }
+
+  async _deleteHADevice(deviceId) {
+    try {
+      const resp = await fetch(`/api/vda_ir_control/ha_devices/${deviceId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+        },
+      });
+
+      if (resp.ok) {
+        await this._loadHADevices();
+        this._render();
+      } else {
+        const error = await resp.json();
+        alert('Failed to delete HA device: ' + (error.error || 'Unknown error'));
+      }
+    } catch (e) {
+      console.error('Failed to delete HA device:', e);
+      alert('Failed to delete HA device');
+    }
+  }
+
+  async _testHADevice(deviceId) {
+    const device = this._haDevices.find(d => d.device_id === deviceId);
+    if (!device) return;
+
+    try {
+      // Send a test command (home button for most devices)
+      await this._hass.callService('vda_ir_control', 'send_ha_command', {
+        device_id: deviceId,
+        command: 'home',
+      });
+      alert('Test command sent successfully!');
+    } catch (e) {
+      console.error('Failed to test HA device:', e);
+      alert('Failed to test HA device: ' + e.message);
+    }
+  }
+
+  async _updateHAMatrixPortOptions(matrixDeviceId) {
+    const portSelect = this.shadowRoot.getElementById('ha-matrix-port');
+    if (!portSelect) return;
+
+    portSelect.innerHTML = '<option value="">Select Input...</option>';
+
+    if (!matrixDeviceId) return;
+
+    try {
+      const resp = await fetch(`/api/vda_ir_control/serial_devices/${matrixDeviceId}`, {
+        headers: {
+          'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+        },
+      });
+
+      if (resp.ok) {
+        const matrixDevice = await resp.json();
+        const inputs = matrixDevice.matrix_inputs || [];
+
+        inputs.forEach(input => {
+          const option = document.createElement('option');
+          option.value = input.index;
+          option.textContent = input.name || `Input ${input.index}`;
+          portSelect.appendChild(option);
+        });
+      }
+    } catch (e) {
+      console.error('Failed to load matrix ports:', e);
     }
   }
 
