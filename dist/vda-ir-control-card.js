@@ -1559,6 +1559,7 @@ class VDAIRControlCard extends HTMLElement {
       'fire_tv': 'Fire TV',
       'chromecast': 'Chromecast',
       'nvidia_shield': 'NVIDIA Shield',
+      'directv': 'DirecTV',
       'custom': 'Custom',
     };
 
@@ -1643,6 +1644,8 @@ class VDAIRControlCard extends HTMLElement {
       case 'create-ha-device':
       case 'edit-ha-device':
         return this._renderHADeviceModal();
+      case 'ha-remote-control':
+        return this._renderHARemoteControlModal();
       default:
         return '';
     }
@@ -3426,6 +3429,187 @@ class VDAIRControlCard extends HTMLElement {
     `;
   }
 
+  _renderHARemoteControlModal() {
+    const device = this._haDevices.find(d => d.device_id === this._modal.deviceId);
+    if (!device) return '';
+
+    const familyLabels = {
+      'apple_tv': 'Apple TV',
+      'roku': 'Roku',
+      'android_tv': 'Android TV',
+      'fire_tv': 'Fire TV',
+      'chromecast': 'Chromecast',
+      'nvidia_shield': 'NVIDIA Shield',
+      'directv': 'DirecTV',
+      'custom': 'Custom',
+    };
+
+    const familyCommands = {
+      'apple_tv': ['up', 'down', 'left', 'right', 'select', 'menu', 'home', 'play_pause', 'pause', 'stop', 'previous', 'next', 'volume_up', 'volume_down', 'skip_forward', 'skip_backward', 'turn_on', 'turn_off', 'wakeup'],
+      'roku': ['up', 'down', 'left', 'right', 'select', 'back', 'home', 'info', 'play', 'pause', 'reverse', 'forward', 'replay', 'search', 'power', 'volume_up', 'volume_down', 'volume_mute', 'channel_up', 'channel_down', 'input_tuner', 'input_hdmi1', 'input_hdmi2', 'input_hdmi3', 'input_hdmi4', 'input_av1'],
+      'android_tv': ['up', 'down', 'left', 'right', 'center', 'back', 'home', 'menu', 'play', 'pause', 'stop', 'next', 'previous', 'volume_up', 'volume_down', 'mute', 'power', 'dpad_up', 'dpad_down', 'dpad_left', 'dpad_right', 'dpad_center'],
+      'fire_tv': ['up', 'down', 'left', 'right', 'select', 'back', 'home', 'menu', 'play', 'pause', 'rewind', 'fastforward', 'next', 'previous'],
+      'chromecast': ['up', 'down', 'left', 'right', 'select', 'back', 'home', 'volume_up', 'volume_down', 'mute', 'play', 'pause', 'stop', 'next', 'previous', 'rewind', 'forward'],
+      'nvidia_shield': ['up', 'down', 'left', 'right', 'select', 'back', 'home', 'menu', 'play', 'pause', 'stop', 'next', 'previous', 'volume_up', 'volume_down', 'mute'],
+      'directv': ['up', 'down', 'left', 'right', 'select', 'menu', 'guide', 'info', 'exit', 'back', 'play', 'pause', 'stop', 'record', 'ffwd', 'rew', 'advance', 'replay', 'power', 'poweron', 'poweroff', 'chanup', 'chandown', 'prev', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'dash', 'enter', 'active', 'list', 'format', 'red', 'green', 'yellow', 'blue'],
+      'custom': [],
+    };
+
+    const commands = familyCommands[device.device_family] || [];
+
+    const powerCmds = commands.filter(c => c.includes('power') || c === 'turn_on' || c === 'turn_off' || c === 'wakeup');
+    const volCmds = commands.filter(c => c.includes('volume') || c === 'mute');
+    const chanCmds = commands.filter(c => c.includes('chan') || c === 'prev');
+    const navCmds = commands.filter(c => ['up', 'down', 'left', 'right', 'center', 'select', 'enter', 'back', 'exit', 'menu', 'home', 'guide', 'info', 'dpad_up', 'dpad_down', 'dpad_left', 'dpad_right', 'dpad_center'].includes(c));
+    const numCmds = commands.filter(c => /^[0-9]$/.test(c));
+    const playCmds = commands.filter(c => ['play', 'pause', 'play_pause', 'stop', 'rewind', 'rew', 'fast_forward', 'fastforward', 'ffwd', 'forward', 'record', 'replay', 'skip_forward', 'skip_backward', 'previous', 'next', 'advance'].includes(c));
+    const colorCmds = commands.filter(c => ['red', 'green', 'yellow', 'blue'].includes(c));
+    const otherCmds = commands.filter(c =>
+      !powerCmds.includes(c) && !volCmds.includes(c) && !chanCmds.includes(c) &&
+      !navCmds.includes(c) && !numCmds.includes(c) && !playCmds.includes(c) && !colorCmds.includes(c)
+    );
+
+    return `
+      <div class="modal" data-action="close-modal">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 450px;">
+          <div class="modal-title" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>Remote: ${device.name}</span>
+            <span class="badge badge-info">${familyLabels[device.device_family] || device.device_family}</span>
+          </div>
+
+          <div style="font-size: 11px; color: var(--secondary-text-color); margin-bottom: 16px;">Entity: ${device.entity_id}</div>
+
+          ${this._modal.lastSent ? `
+            <div style="padding: 8px 12px; background: var(--success-color, #4caf50); color: white; border-radius: 6px; margin-bottom: 16px; text-align: center; font-size: 13px;">
+              Sent: ${this._formatCommand(this._modal.lastSent)}
+            </div>
+          ` : ''}
+
+          <div class="remote-layout" style="display: flex; flex-direction: column; gap: 16px;">
+
+            <!-- Power -->
+            ${powerCmds.length > 0 ? `
+              <div class="remote-section">
+                <div style="display: flex; justify-content: center; gap: 8px; flex-wrap: wrap;">
+                  ${powerCmds.map(cmd => `
+                    <button class="remote-btn power" data-action="send-ha-remote-cmd" data-command="${cmd}">
+                      ${cmd === 'power' || cmd === 'turn_on' || cmd === 'turn_off' || cmd === 'wakeup' ? `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.58-5.42L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z"/></svg> ${this._formatCommand(cmd)}` : this._formatCommand(cmd)}
+                    </button>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+
+            <!-- Navigation D-pad -->
+            ${navCmds.length > 0 ? `
+              <div class="remote-section">
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; max-width: 180px; margin: 0 auto;">
+                  <div></div>
+                  ${navCmds.includes('up') || navCmds.includes('dpad_up') ? `<button class="remote-btn nav" data-action="send-ha-remote-cmd" data-command="${navCmds.includes('up') ? 'up' : 'dpad_up'}"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg></button>` : '<div></div>'}
+                  <div></div>
+                  ${navCmds.includes('left') || navCmds.includes('dpad_left') ? `<button class="remote-btn nav" data-action="send-ha-remote-cmd" data-command="${navCmds.includes('left') ? 'left' : 'dpad_left'}"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg></button>` : '<div></div>'}
+                  ${navCmds.includes('select') || navCmds.includes('enter') || navCmds.includes('center') || navCmds.includes('dpad_center') ? `<button class="remote-btn nav ok" data-action="send-ha-remote-cmd" data-command="${navCmds.includes('select') ? 'select' : navCmds.includes('enter') ? 'enter' : navCmds.includes('center') ? 'center' : 'dpad_center'}">OK</button>` : '<div></div>'}
+                  ${navCmds.includes('right') || navCmds.includes('dpad_right') ? `<button class="remote-btn nav" data-action="send-ha-remote-cmd" data-command="${navCmds.includes('right') ? 'right' : 'dpad_right'}"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg></button>` : '<div></div>'}
+                  <div></div>
+                  ${navCmds.includes('down') || navCmds.includes('dpad_down') ? `<button class="remote-btn nav" data-action="send-ha-remote-cmd" data-command="${navCmds.includes('down') ? 'down' : 'dpad_down'}"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg></button>` : '<div></div>'}
+                  <div></div>
+                </div>
+                <div style="display: flex; justify-content: center; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+                  ${navCmds.filter(c => !['up','down','left','right','select','enter','center','dpad_up','dpad_down','dpad_left','dpad_right','dpad_center'].includes(c)).map(cmd => `
+                    <button class="remote-btn" data-action="send-ha-remote-cmd" data-command="${cmd}">${this._formatCommand(cmd)}</button>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+
+            <!-- Volume & Channel -->
+            ${volCmds.length > 0 || chanCmds.length > 0 ? `
+              <div class="remote-section" style="display: flex; justify-content: space-around;">
+                ${volCmds.length > 0 ? `
+                  <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                    <span style="font-size: 11px; color: var(--secondary-text-color);">Volume</span>
+                    ${volCmds.includes('volume_up') ? `<button class="remote-btn vol" data-action="send-ha-remote-cmd" data-command="volume_up">+</button>` : ''}
+                    ${volCmds.includes('mute') || volCmds.includes('volume_mute') ? `<button class="remote-btn vol mute" data-action="send-ha-remote-cmd" data-command="${volCmds.includes('mute') ? 'mute' : 'volume_mute'}"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg></button>` : ''}
+                    ${volCmds.includes('volume_down') ? `<button class="remote-btn vol" data-action="send-ha-remote-cmd" data-command="volume_down">−</button>` : ''}
+                  </div>
+                ` : ''}
+                ${chanCmds.length > 0 ? `
+                  <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                    <span style="font-size: 11px; color: var(--secondary-text-color);">Channel</span>
+                    ${chanCmds.includes('chanup') || chanCmds.includes('channel_up') ? `<button class="remote-btn chan" data-action="send-ha-remote-cmd" data-command="${chanCmds.includes('chanup') ? 'chanup' : 'channel_up'}"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg></button>` : ''}
+                    ${chanCmds.includes('chandown') || chanCmds.includes('channel_down') ? `<button class="remote-btn chan" data-action="send-ha-remote-cmd" data-command="${chanCmds.includes('chandown') ? 'chandown' : 'channel_down'}"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg></button>` : ''}
+                    ${chanCmds.includes('prev') ? `<button class="remote-btn chan" data-action="send-ha-remote-cmd" data-command="prev">Prev</button>` : ''}
+                  </div>
+                ` : ''}
+              </div>
+            ` : ''}
+
+            <!-- Number Pad -->
+            ${numCmds.length > 0 ? `
+              <div class="remote-section">
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; max-width: 180px; margin: 0 auto;">
+                  ${['1','2','3','4','5','6','7','8','9','','0',''].map(n => {
+                    if (n === '') return '<div></div>';
+                    const cmd = numCmds.find(c => c === n);
+                    return cmd ? `<button class="remote-btn num" data-action="send-ha-remote-cmd" data-command="${cmd}">${n}</button>` : '<div></div>';
+                  }).join('')}
+                </div>
+              </div>
+            ` : ''}
+
+            <!-- Playback Controls -->
+            ${playCmds.length > 0 ? `
+              <div class="remote-section">
+                <div style="display: flex; justify-content: center; gap: 6px; flex-wrap: wrap;">
+                  ${playCmds.includes('rewind') || playCmds.includes('rew') || playCmds.includes('reverse') ? `<button class="remote-btn play" data-action="send-ha-remote-cmd" data-command="${playCmds.includes('rewind') ? 'rewind' : playCmds.includes('rew') ? 'rew' : 'reverse'}"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z"/></svg></button>` : ''}
+                  ${playCmds.includes('previous') || playCmds.includes('skip_backward') ? `<button class="remote-btn play" data-action="send-ha-remote-cmd" data-command="${playCmds.includes('previous') ? 'previous' : 'skip_backward'}"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>` : ''}
+                  ${playCmds.includes('replay') ? `<button class="remote-btn play" data-action="send-ha-remote-cmd" data-command="replay"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg></button>` : ''}
+                  ${playCmds.includes('play') ? `<button class="remote-btn play" data-action="send-ha-remote-cmd" data-command="play"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>` : ''}
+                  ${playCmds.includes('play_pause') ? `<button class="remote-btn play" data-action="send-ha-remote-cmd" data-command="play_pause"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>` : ''}
+                  ${playCmds.includes('pause') ? `<button class="remote-btn play" data-action="send-ha-remote-cmd" data-command="pause"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg></button>` : ''}
+                  ${playCmds.includes('stop') ? `<button class="remote-btn play" data-action="send-ha-remote-cmd" data-command="stop"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 6h12v12H6z"/></svg></button>` : ''}
+                  ${playCmds.includes('next') || playCmds.includes('skip_forward') ? `<button class="remote-btn play" data-action="send-ha-remote-cmd" data-command="${playCmds.includes('next') ? 'next' : 'skip_forward'}"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>` : ''}
+                  ${playCmds.includes('advance') ? `<button class="remote-btn play" data-action="send-ha-remote-cmd" data-command="advance"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg></button>` : ''}
+                  ${playCmds.includes('fast_forward') || playCmds.includes('fastforward') || playCmds.includes('ffwd') || playCmds.includes('forward') ? `<button class="remote-btn play" data-action="send-ha-remote-cmd" data-command="${playCmds.includes('fast_forward') ? 'fast_forward' : playCmds.includes('fastforward') ? 'fastforward' : playCmds.includes('ffwd') ? 'ffwd' : 'forward'}"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg></button>` : ''}
+                  ${playCmds.includes('record') ? `<button class="remote-btn play record" data-action="send-ha-remote-cmd" data-command="record"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="12" cy="12" r="8"/></svg></button>` : ''}
+                </div>
+              </div>
+            ` : ''}
+
+            <!-- Color Buttons -->
+            ${colorCmds.length > 0 ? `
+              <div class="remote-section">
+                <div style="display: flex; justify-content: center; gap: 6px; flex-wrap: wrap;">
+                  ${colorCmds.includes('red') ? `<button class="remote-btn" style="background: #d32f2f; color: white;" data-action="send-ha-remote-cmd" data-command="red">Red</button>` : ''}
+                  ${colorCmds.includes('green') ? `<button class="remote-btn" style="background: #388e3c; color: white;" data-action="send-ha-remote-cmd" data-command="green">Green</button>` : ''}
+                  ${colorCmds.includes('yellow') ? `<button class="remote-btn" style="background: #f9a825; color: black;" data-action="send-ha-remote-cmd" data-command="yellow">Yellow</button>` : ''}
+                  ${colorCmds.includes('blue') ? `<button class="remote-btn" style="background: #1976d2; color: white;" data-action="send-ha-remote-cmd" data-command="blue">Blue</button>` : ''}
+                </div>
+              </div>
+            ` : ''}
+
+            <!-- Other Commands -->
+            ${otherCmds.length > 0 ? `
+              <div class="remote-section">
+                <div style="font-size: 11px; color: var(--secondary-text-color); margin-bottom: 8px; text-align: center;">Other</div>
+                <div style="display: flex; justify-content: center; gap: 6px; flex-wrap: wrap;">
+                  ${otherCmds.map(cmd => `
+                    <button class="remote-btn" data-action="send-ha-remote-cmd" data-command="${cmd}">${this._formatCommand(cmd)}</button>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+
+          </div>
+
+          <div class="modal-actions">
+            <button class="btn btn-secondary" data-action="close-modal">Close</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   async _openEditDeviceModal(deviceId) {
     const device = this._devices.find(d => d.device_id === deviceId);
     if (!device) {
@@ -3766,6 +3950,10 @@ class VDAIRControlCard extends HTMLElement {
 
       case 'send-remote-cmd':
         await this._sendRemoteCommand(e.target.dataset.command);
+        break;
+
+      case 'send-ha-remote-cmd':
+        await this._sendHARemoteCommand(e.target.dataset.command);
         break;
 
       case 'close-modal':
@@ -4123,7 +4311,8 @@ class VDAIRControlCard extends HTMLElement {
         break;
 
       case 'test-ha-device':
-        await this._testHADevice(e.target.closest('[data-device-id]').dataset.deviceId);
+        this._modal = { type: 'ha-remote-control', deviceId: e.target.closest('[data-device-id]').dataset.deviceId };
+        this._render();
         break;
 
       case 'toggle-ha-matrix-link':
@@ -4429,6 +4618,31 @@ class VDAIRControlCard extends HTMLElement {
       }, 1500);
     } catch (e) {
       console.error('Failed to send command:', e);
+      alert(`Failed to send ${command}`);
+    }
+  }
+
+  async _sendHARemoteCommand(command) {
+    if (!this._modal || !this._modal.deviceId) return;
+
+    try {
+      await this._hass.callService('vda_ir_control', 'send_ha_command', {
+        device_id: this._modal.deviceId,
+        command: command,
+      });
+      // Update modal to show last sent command
+      this._modal.lastSent = command;
+      this._render();
+
+      // Clear the "sent" indicator after 1.5 seconds
+      setTimeout(() => {
+        if (this._modal && this._modal.lastSent === command) {
+          this._modal.lastSent = null;
+          this._render();
+        }
+      }, 1500);
+    } catch (e) {
+      console.error('Failed to send HA command:', e);
       alert(`Failed to send ${command}`);
     }
   }
