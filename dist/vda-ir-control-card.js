@@ -3314,6 +3314,7 @@ class VDAIRControlCard extends HTMLElement {
       { value: 'fire_tv', label: 'Fire TV' },
       { value: 'chromecast', label: 'Chromecast' },
       { value: 'nvidia_shield', label: 'NVIDIA Shield' },
+      { value: 'directv', label: 'DirecTV' },
       { value: 'custom', label: 'Custom' },
     ];
 
