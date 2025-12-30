@@ -3388,6 +3388,17 @@ class VDAIRControlCard extends HTMLElement {
             <input type="text" id="ha-device-location" value="${device.location || ''}" placeholder="e.g., Living Room">
           </div>
 
+          <div class="form-group">
+            <label>Media Player Entity (for Now Playing info)</label>
+            <select id="ha-media-player-entity">
+              <option value="">None (auto-detect)</option>
+              ${this._haEntities.filter(e => e.domain === 'media_player').map(e => `
+                <option value="${e.entity_id}" ${device.media_player_entity_id === e.entity_id ? 'selected' : ''}>${e.name} (${e.entity_id})</option>
+              `).join('')}
+            </select>
+            <small style="color: var(--secondary-text-color); font-size: 11px;">Optional: Select a media_player for channel/show info display</small>
+          </div>
+
           ${matrixDevices.length > 0 ? `
             <div class="form-group" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--divider-color, #e0e0e0);">
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
@@ -5394,6 +5405,7 @@ class VDAIRControlCard extends HTMLElement {
     const deviceFamily = this.shadowRoot.getElementById('ha-device-family').value;
     const entityId = this.shadowRoot.getElementById('ha-entity-id').value;
     const location = this.shadowRoot.getElementById('ha-device-location').value;
+    const mediaPlayerEntityId = this.shadowRoot.getElementById('ha-media-player-entity')?.value || null;
 
     // Matrix linking
     const linkToMatrix = this.shadowRoot.getElementById('ha-link-to-matrix')?.checked;
@@ -5415,6 +5427,7 @@ class VDAIRControlCard extends HTMLElement {
         matrix_device_id: matrixDeviceId || null,
         matrix_device_type: matrixDeviceId ? 'serial' : null,
         matrix_port: matrixPort || null,
+        media_player_entity_id: mediaPlayerEntityId,
       };
 
       const method = isEdit ? 'PUT' : 'POST';
