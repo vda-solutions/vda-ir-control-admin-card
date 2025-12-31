@@ -3219,6 +3219,8 @@ class VDAIRControlCard extends HTMLElement {
     try {
       // Check if this is an HA device
       const isHADevice = this._haDevices.some(d => d.device_id === deviceId);
+      // Check if this is a serial device (exclude the matrix itself)
+      const isSerialDevice = this._serialDevices.some(d => d.device_id === deviceId && d.device_type !== 'hdmi_matrix');
 
       if (isHADevice) {
         // Update HA device via API
@@ -3239,6 +3241,11 @@ class VDAIRControlCard extends HTMLElement {
         } else {
           console.log(`Successfully updated HA device ${deviceId}`);
         }
+      } else if (isSerialDevice) {
+        // Serial devices don't need to store matrix link info on themselves
+        // The matrix stores which device is on which output
+        // So we just log and skip updating the serial device itself
+        console.log(`Serial device ${deviceId} assigned to matrix output - no device update needed`);
       } else {
         // Update IR device via service
         await this._hass.callService('vda_ir_control', 'update_device', {
