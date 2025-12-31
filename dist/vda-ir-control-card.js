@@ -2915,10 +2915,14 @@ class VDAIRControlCard extends HTMLElement {
     const matrixInputs = matrixDevice.matrix_inputs || [];
     const matrixOutputs = matrixDevice.matrix_outputs || [];
 
-    // Get all controlled devices for the dropdowns (both IR devices and HA devices)
+    // Get all controlled devices for the dropdowns (IR devices, serial devices, and HA devices)
     const irDevices = (this._devices || []).map(d => ({ ...d, _type: 'ir' }));
+    // Serial devices (exclude matrix devices - they can't be inputs/outputs of themselves)
+    const serialDevicesForDropdown = (this._serialDevices || [])
+      .filter(d => d.device_type !== 'hdmi_matrix')
+      .map(d => ({ ...d, _type: 'serial' }));
     const haDevices = (this._haDevices || []).map(d => ({ ...d, _type: 'ha' }));
-    const availableDevices = [...irDevices, ...haDevices];
+    const availableDevices = [...irDevices, ...serialDevicesForDropdown, ...haDevices];
 
     return `
       <div class="modal" data-action="close-modal">
@@ -2974,7 +2978,7 @@ class VDAIRControlCard extends HTMLElement {
                             style="flex: 1; padding: 6px 10px; border: 1px solid var(--divider-color); border-radius: 4px;">
                       <option value="">-- Unassigned --</option>
                       ${availableDevices.map(d => `
-                        <option value="${d.device_id}" ${input.device_id === d.device_id ? 'selected' : ''}>${d.name}${d._type === 'ha' ? ' (HA)' : ''}</option>
+                        <option value="${d.device_id}" ${input.device_id === d.device_id ? 'selected' : ''}>${d.name}${d._type === 'ha' ? ' (HA)' : d._type === 'serial' ? ' (Serial)' : ''}</option>
                       `).join('')}
                     </select>
                   </div>
@@ -2997,7 +3001,7 @@ class VDAIRControlCard extends HTMLElement {
                             style="flex: 1; padding: 6px 10px; border: 1px solid var(--divider-color); border-radius: 4px;">
                       <option value="">-- Unassigned --</option>
                       ${availableDevices.map(d => `
-                        <option value="${d.device_id}" ${output.device_id === d.device_id ? 'selected' : ''}>${d.name}${d._type === 'ha' ? ' (HA)' : ''}</option>
+                        <option value="${d.device_id}" ${output.device_id === d.device_id ? 'selected' : ''}>${d.name}${d._type === 'ha' ? ' (HA)' : d._type === 'serial' ? ' (Serial)' : ''}</option>
                       `).join('')}
                     </select>
                   </div>
