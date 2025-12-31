@@ -1,6 +1,7 @@
 /**
  * VDA IR Control Management Card
  * A custom Lovelace card for managing IR boards, profiles, and devices
+ * @version 1.8.0
  */
 
 class VDAIRControlCard extends HTMLElement {
@@ -83,9 +84,9 @@ class VDAIRControlCard extends HTMLElement {
     this._render();
   }
 
-  async _loadGPIOPins() {
+  async _loadGPIOPins(boardType = 'poe_iso') {
     try {
-      const resp = await fetch('/api/vda_ir_control/gpio_pins', {
+      const resp = await fetch(`/api/vda_ir_control/gpio_pins?board_type=${boardType}`, {
         headers: {
           'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
         },
@@ -94,6 +95,7 @@ class VDAIRControlCard extends HTMLElement {
         const data = await resp.json();
         this._gpioPins = data.pins || [];
         this._reservedPins = data.reserved || [];
+        this._currentBoardType = data.board_type || boardType;
       } else {
         this._gpioPins = [];
         this._reservedPins = [];
@@ -187,6 +189,37 @@ class VDAIRControlCard extends HTMLElement {
     } catch (e) {
       console.error('Failed to load boards:', e);
       this._boards = [];
+    }
+  }
+
+  async _changeBoardType(boardId, boardType) {
+    try {
+      const resp = await fetch(`/api/vda_ir_control/boards/${boardId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ board_type: boardType }),
+      });
+      if (resp.ok) {
+        // Update local board data
+        const board = this._boards.find(b => b.board_id === boardId);
+        if (board) {
+          board.board_type = boardType;
+        }
+        // Reload GPIO pins for the new board type if this is the selected board
+        if (this._selectedBoard === boardId) {
+          await this._loadGPIOPins(boardType);
+        }
+        this._render();
+      } else {
+        console.error('Failed to update board type');
+        alert('Failed to update board type');
+      }
+    } catch (e) {
+      console.error('Failed to update board type:', e);
+      alert('Failed to update board type: ' + e.message);
     }
   }
 
@@ -539,7 +572,11 @@ class VDAIRControlCard extends HTMLElement {
 
   async _loadPorts(boardId) {
     try {
-      // Fetch ports via REST API and port assignments in parallel
+      // Get board to know its type
+      const board = this._boards.find(b => b.board_id === boardId);
+      const boardType = board?.board_type || 'poe_iso';
+
+      // Fetch ports via REST API, port assignments, and GPIO pins for this board type
       const [portsResp] = await Promise.all([
         fetch(`/api/vda_ir_control/ports/${boardId}`, {
           headers: {
@@ -547,33 +584,53 @@ class VDAIRControlCard extends HTMLElement {
           },
         }),
         this._loadPortAssignments(boardId),
+        this._loadGPIOPins(boardType),
       ]);
       if (portsResp.ok) {
         const data = await portsResp.json();
         this._ports = data.ports || [];
       } else {
-        // If no ports from board, use GPIO pins as available ports
-        this._ports = this._gpioPins
-          .filter(p => p.can_output || p.can_input)
-          .map(p => ({
-            port: p.gpio,
-            gpio: p.gpio,
-            mode: 'disabled',
-            name: '',
-          }));
+        // Try fetching directly from board IP
+        if (board && board.ip_address) {
+          try {
+            const directResp = await fetch(`http://${board.ip_address}/ports`);
+            if (directResp.ok) {
+              const data = await directResp.json();
+              this._ports = data.ports || [];
+            } else {
+              this._ports = [];
+            }
+          } catch (e) {
+            console.error('Failed to fetch ports directly from board:', e);
+            this._ports = [];
+          }
+        } else {
+          this._ports = [];
+        }
       }
       this._render();
     } catch (e) {
       console.error('Failed to load ports:', e);
-      // Fallback to GPIO pins
-      this._ports = this._gpioPins
-        .filter(p => p.can_output || p.can_input)
-        .map(p => ({
-          port: p.gpio,
-          gpio: p.gpio,
-          mode: 'disabled',
-          name: '',
-        }));
+      // Try fetching directly from board IP as last resort
+      const board = this._boards.find(b => b.board_id === boardId);
+      const boardType = board?.board_type || 'poe_iso';
+      await this._loadGPIOPins(boardType);
+      if (board && board.ip_address) {
+        try {
+          const directResp = await fetch(`http://${board.ip_address}/ports`);
+          if (directResp.ok) {
+            const data = await directResp.json();
+            this._ports = data.ports || [];
+          } else {
+            this._ports = [];
+          }
+        } catch (e2) {
+          console.error('Failed to fetch ports directly from board:', e2);
+          this._ports = [];
+        }
+      } else {
+        this._ports = [];
+      }
       this._render();
     }
   }
@@ -1062,13 +1119,20 @@ class VDAIRControlCard extends HTMLElement {
               <div class="list-item-title">
                 ${board.board_name}
                 <span class="badge badge-success">Online</span>
+                <span class="badge" style="background: var(--secondary-background-color); color: var(--primary-text-color);">${board.board_type === 'devkit' ? 'DevKit' : 'POE-ISO'}</span>
               </div>
               <div class="list-item-subtitle">
                 ${board.board_id} • ${board.ip_address}
               </div>
             </div>
-            <div class="list-item-actions">
-              <button class="btn btn-secondary btn-small" data-action="configure-ports" data-board-id="${board.board_id}">
+            <div class="list-item-actions" style="display: flex; gap: 8px; align-items: center;">
+              <select class="board-type-select" data-action="change-board-type" data-board-id="${board.board_id}"
+                      style="padding: 4px 8px; border-radius: 4px; border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); font-size: 12px;"
+                      onclick="event.stopPropagation()">
+                <option value="poe_iso" ${board.board_type !== 'devkit' ? 'selected' : ''}>ESP32-POE-ISO</option>
+                <option value="devkit" ${board.board_type === 'devkit' ? 'selected' : ''}>ESP32 DevKit</option>
+              </select>
+              <button class="btn btn-secondary btn-small" data-action="configure-ports" data-board-id="${board.board_id}" onclick="event.stopPropagation()">
                 Configure Ports
               </button>
             </div>
@@ -1090,16 +1154,22 @@ class VDAIRControlCard extends HTMLElement {
       `;
     }
 
+    // Get current board's type
+    const currentBoard = this._boards.find(b => b.board_id === this._selectedBoard);
+    const boardType = currentBoard?.board_type || 'poe_iso';
+    const boardTypeName = boardType === 'devkit' ? 'ESP32 DevKit' : 'ESP32-POE-ISO';
+
     // Use GPIO pins if ports not loaded yet
     const portsToShow = this._ports.length > 0 ? this._ports : this._gpioPins
       .filter(p => p.can_output || p.can_input)
       .map(p => ({ port: p.gpio, gpio: p.gpio, mode: 'disabled', name: '' }));
 
+    const portSource = this._ports.length > 0 ? 'board' : 'fallback';
     return `
       <div class="section">
         <div class="section-title">Port Configuration - ${this._selectedBoard}</div>
         <p style="font-size: 12px; color: var(--secondary-text-color); margin-bottom: 12px;">
-          ESP32-POE-ISO GPIO pins available for IR. Click a port to configure.
+          ${boardTypeName} GPIO pins ${portSource === 'board' ? '(from board)' : '(fallback)'} available for IR. Click a port to configure.
         </p>
         <div class="port-grid">
           ${portsToShow.map(port => {
@@ -1107,13 +1177,14 @@ class VDAIRControlCard extends HTMLElement {
             const assignments = this._portAssignments[port.port] || [];
             const hasAssignments = assignments.length > 0;
 
+            const mode = port.mode || 'disabled';
             return `
-              <div class="port-item ${port.mode === 'ir_input' ? 'input' : port.mode === 'ir_output' ? 'output' : 'disabled'} ${hasAssignments ? 'assigned' : ''}"
+              <div class="port-item ${mode === 'ir_input' ? 'input' : mode === 'ir_output' ? 'output' : 'disabled'} ${hasAssignments ? 'assigned' : ''}"
                    data-action="edit-port" data-port="${port.port}"
                    title="${gpioPin ? gpioPin.notes : ''}">
                 <div class="port-number">Port ${port.port}</div>
                 <div class="port-gpio">${gpioPin ? gpioPin.name : `GPIO${port.port}`}</div>
-                <div class="port-mode">${port.mode.replace('ir_', '').replace('_', ' ')}</div>
+                <div class="port-mode">${mode.replace('ir_', '').replace('_', ' ')}</div>
                 <div class="port-name">${port.name || '-'}</div>
                 ${hasAssignments ? `<div class="port-devices">${assignments.length} device${assignments.length > 1 ? 's' : ''}</div>` : ''}
               </div>
@@ -2811,8 +2882,10 @@ class VDAIRControlCard extends HTMLElement {
     const matrixInputs = matrixDevice.matrix_inputs || [];
     const matrixOutputs = matrixDevice.matrix_outputs || [];
 
-    // Get all controlled devices for the dropdowns
-    const availableDevices = this._devices || [];
+    // Get all controlled devices for the dropdowns (both IR devices and HA devices)
+    const irDevices = (this._devices || []).map(d => ({ ...d, _type: 'ir' }));
+    const haDevices = (this._haDevices || []).map(d => ({ ...d, _type: 'ha' }));
+    const availableDevices = [...irDevices, ...haDevices];
 
     return `
       <div class="modal" data-action="close-modal">
@@ -2868,7 +2941,7 @@ class VDAIRControlCard extends HTMLElement {
                             style="flex: 1; padding: 6px 10px; border: 1px solid var(--divider-color); border-radius: 4px;">
                       <option value="">-- Unassigned --</option>
                       ${availableDevices.map(d => `
-                        <option value="${d.device_id}" ${input.device_id === d.device_id ? 'selected' : ''}>${d.name}</option>
+                        <option value="${d.device_id}" ${input.device_id === d.device_id ? 'selected' : ''}>${d.name}${d._type === 'ha' ? ' (HA)' : ''}</option>
                       `).join('')}
                     </select>
                   </div>
@@ -2891,7 +2964,7 @@ class VDAIRControlCard extends HTMLElement {
                             style="flex: 1; padding: 6px 10px; border: 1px solid var(--divider-color); border-radius: 4px;">
                       <option value="">-- Unassigned --</option>
                       ${availableDevices.map(d => `
-                        <option value="${d.device_id}" ${output.device_id === d.device_id ? 'selected' : ''}>${d.name}</option>
+                        <option value="${d.device_id}" ${output.device_id === d.device_id ? 'selected' : ''}>${d.name}${d._type === 'ha' ? ' (HA)' : ''}</option>
                       `).join('')}
                     </select>
                   </div>
@@ -3107,14 +3180,39 @@ class VDAIRControlCard extends HTMLElement {
   async _updateDeviceMatrixLink(deviceId, matrixDeviceId, matrixDeviceType, portType, port) {
     console.log(`Updating device ${deviceId} matrix link:`, { matrixDeviceId, matrixDeviceType, portType, port });
     try {
-      await this._hass.callService('vda_ir_control', 'update_device', {
-        device_id: deviceId,
-        matrix_device_id: matrixDeviceId,
-        matrix_device_type: matrixDeviceType,
-        matrix_port_type: portType,
-        matrix_port: port
-      });
-      console.log(`Successfully updated device ${deviceId}`);
+      // Check if this is an HA device
+      const isHADevice = this._haDevices.some(d => d.device_id === deviceId);
+
+      if (isHADevice) {
+        // Update HA device via API
+        const resp = await fetch(`/api/vda_ir_control/ha_devices/${deviceId}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            matrix_device_id: matrixDeviceId || '',
+            matrix_device_type: matrixDeviceType || '',
+            matrix_port: port || ''
+          })
+        });
+        if (!resp.ok) {
+          console.error(`Failed to update HA device ${deviceId}`);
+        } else {
+          console.log(`Successfully updated HA device ${deviceId}`);
+        }
+      } else {
+        // Update IR device via service
+        await this._hass.callService('vda_ir_control', 'update_device', {
+          device_id: deviceId,
+          matrix_device_id: matrixDeviceId,
+          matrix_device_type: matrixDeviceType,
+          matrix_port_type: portType,
+          matrix_port: port
+        });
+        console.log(`Successfully updated IR device ${deviceId}`);
+      }
     } catch (e) {
       console.error(`Failed to update device ${deviceId} matrix link:`, e);
     }
@@ -3459,7 +3557,7 @@ class VDAIRControlCard extends HTMLElement {
       'apple_tv': ['up', 'down', 'left', 'right', 'select', 'menu', 'home', 'play_pause', 'pause', 'stop', 'previous', 'next', 'volume_up', 'volume_down', 'skip_forward', 'skip_backward', 'turn_on', 'turn_off', 'wakeup'],
       'roku': ['up', 'down', 'left', 'right', 'select', 'back', 'home', 'info', 'play', 'pause', 'reverse', 'forward', 'replay', 'search', 'power', 'volume_up', 'volume_down', 'volume_mute', 'channel_up', 'channel_down', 'input_tuner', 'input_hdmi1', 'input_hdmi2', 'input_hdmi3', 'input_hdmi4', 'input_av1'],
       'android_tv': ['up', 'down', 'left', 'right', 'center', 'back', 'home', 'menu', 'play', 'pause', 'stop', 'next', 'previous', 'volume_up', 'volume_down', 'mute', 'power', 'dpad_up', 'dpad_down', 'dpad_left', 'dpad_right', 'dpad_center'],
-      'fire_tv': ['up', 'down', 'left', 'right', 'select', 'back', 'home', 'menu', 'play', 'pause', 'rewind', 'fastforward', 'next', 'previous'],
+      'fire_tv': ['up', 'down', 'left', 'right', 'select', 'back', 'home', 'menu', 'play', 'pause', 'stop', 'rewind', 'fastforward', 'next', 'previous', 'volume_up', 'volume_down', 'mute', 'power'],
       'chromecast': ['up', 'down', 'left', 'right', 'select', 'back', 'home', 'volume_up', 'volume_down', 'mute', 'play', 'pause', 'stop', 'next', 'previous', 'rewind', 'forward'],
       'nvidia_shield': ['up', 'down', 'left', 'right', 'select', 'back', 'home', 'menu', 'play', 'pause', 'stop', 'next', 'previous', 'volume_up', 'volume_down', 'mute'],
       'directv': ['up', 'down', 'left', 'right', 'select', 'menu', 'guide', 'info', 'exit', 'back', 'play', 'pause', 'stop', 'record', 'ffwd', 'rew', 'advance', 'replay', 'power', 'poweron', 'poweroff', 'chanup', 'chandown', 'prev', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'dash', 'enter', 'active', 'list', 'format', 'red', 'green', 'yellow', 'blue'],
@@ -3842,8 +3940,12 @@ class VDAIRControlCard extends HTMLElement {
         break;
 
       case 'configure-ports':
-        this._selectedBoard = e.target.dataset.boardId;
+        this._selectedBoard = e.target.closest('[data-board-id]').dataset.boardId;
         await this._loadPorts(this._selectedBoard);
+        break;
+
+      case 'change-board-type':
+        await this._changeBoardType(e.target.closest('[data-board-id]').dataset.boardId, e.target.value);
         break;
 
       case 'edit-port':
@@ -3964,7 +4066,10 @@ class VDAIRControlCard extends HTMLElement {
         break;
 
       case 'send-ha-remote-cmd':
-        await this._sendHARemoteCommand(e.target.dataset.command);
+        const cmdBtn = e.target.closest('[data-command]');
+        if (cmdBtn && cmdBtn.dataset.command) {
+          await this._sendHARemoteCommand(cmdBtn.dataset.command);
+        }
         break;
 
       case 'close-modal':
