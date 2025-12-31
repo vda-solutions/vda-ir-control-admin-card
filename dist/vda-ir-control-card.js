@@ -1,7 +1,7 @@
 /**
  * VDA IR Control Management Card
  * A custom Lovelace card for managing IR boards, profiles, and devices
- * @version 1.8.0
+ * @version 1.9.0
  */
 
 class VDAIRControlCard extends HTMLElement {
@@ -34,6 +34,7 @@ class VDAIRControlCard extends HTMLElement {
     this._selectedSerialDevice = null;
     this._serialTestResult = null;
     this._availableSerialPorts = [];
+    this._serialProfiles = [];
     // Device groups state
     this._deviceGroups = [];
     // HA remote devices state
@@ -77,6 +78,7 @@ class VDAIRControlCard extends HTMLElement {
       this._loadDevices(),
       this._loadGPIOPins(),
       this._loadSerialDevices(),
+      this._loadSerialProfiles(),
       this._loadDeviceGroups(),
       this._loadHADevices(),
       this._loadHADeviceFamilies(),
@@ -455,6 +457,25 @@ class VDAIRControlCard extends HTMLElement {
     } catch (e) {
       console.error('Failed to load serial devices:', e);
       this._serialDevices = [];
+    }
+  }
+
+  async _loadSerialProfiles() {
+    try {
+      const resp = await fetch('/api/vda_ir_control/serial_profiles', {
+        headers: {
+          'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+        },
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        this._serialProfiles = data.profiles || [];
+      } else {
+        this._serialProfiles = [];
+      }
+    } catch (e) {
+      console.error('Failed to load serial profiles:', e);
+      this._serialProfiles = [];
     }
   }
 
@@ -2681,6 +2702,18 @@ class VDAIRControlCard extends HTMLElement {
               <input type="text" id="serial-device-name" placeholder="HDMI Matrix" />
             </div>
             <div class="form-group">
+              <label>Device Profile (optional)</label>
+              <select id="serial-device-profile" data-action="serial-profile-changed">
+                <option value="">-- No profile (configure manually) --</option>
+                ${this._serialProfiles.map(p => `
+                  <option value="${p.profile_id}" data-baud="${p.baud_rate}" data-type="${p.device_type}">
+                    ${p.name} (${p.manufacturer})
+                  </option>
+                `).join('')}
+              </select>
+              <small>Select a profile to auto-configure serial settings and commands</small>
+            </div>
+            <div class="form-group">
               <label>Connection Mode</label>
               <select id="serial-device-mode" data-action="serial-mode-changed">
                 <option value="direct">Direct (USB/Serial on Home Assistant)</option>
@@ -4279,7 +4312,7 @@ class VDAIRControlCard extends HTMLElement {
         this._modal = { type: 'create-serial-device' };
         await this._loadAvailableSerialPorts();
         this._render();
-        // Add mode change listener after render
+        // Add mode and profile change listeners after render
         setTimeout(() => {
           const modeSelect = this.shadowRoot.getElementById('serial-device-mode');
           if (modeSelect) {
@@ -4292,6 +4325,25 @@ class VDAIRControlCard extends HTMLElement {
               } else {
                 directFields.style.display = 'none';
                 bridgeFields.style.display = 'block';
+              }
+            });
+          }
+          // Add profile change listener to auto-fill settings
+          const profileSelect = this.shadowRoot.getElementById('serial-device-profile');
+          if (profileSelect) {
+            profileSelect.addEventListener('change', (evt) => {
+              const option = evt.target.selectedOptions[0];
+              if (option && option.value) {
+                const baudRate = option.dataset.baud;
+                const deviceType = option.dataset.type;
+                if (baudRate) {
+                  const baudSelect = this.shadowRoot.getElementById('serial-device-baud');
+                  if (baudSelect) baudSelect.value = baudRate;
+                }
+                if (deviceType) {
+                  const typeSelect = this.shadowRoot.getElementById('serial-device-type');
+                  if (typeSelect) typeSelect.value = deviceType;
+                }
               }
             });
           }
@@ -5169,6 +5221,7 @@ class VDAIRControlCard extends HTMLElement {
     const dataBits = parseInt(this.shadowRoot.getElementById('serial-device-data-bits').value);
     const parity = this.shadowRoot.getElementById('serial-device-parity').value;
     const stopBits = parseInt(this.shadowRoot.getElementById('serial-device-stop-bits').value);
+    const profileId = this.shadowRoot.getElementById('serial-device-profile').value;
 
     if (!deviceId || !name) {
       alert('Please fill in Device ID and Name');
@@ -5217,6 +5270,10 @@ class VDAIRControlCard extends HTMLElement {
       });
 
       if (resp.ok) {
+        // If a profile was selected, apply its commands to the device
+        if (profileId) {
+          await this._applySerialProfileToDevice(deviceId, profileId);
+        }
         this._modal = null;
         await this._loadSerialDevices();
         this._render();
@@ -5227,6 +5284,56 @@ class VDAIRControlCard extends HTMLElement {
     } catch (e) {
       console.error('Failed to create serial device:', e);
       alert('Failed to create device');
+    }
+  }
+
+  async _applySerialProfileToDevice(deviceId, profileId) {
+    try {
+      // Fetch profile apply data
+      const profileResp = await fetch(`/api/vda_ir_control/serial_profiles/${profileId}/apply`, {
+        headers: {
+          'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+        },
+      });
+
+      if (!profileResp.ok) {
+        console.error('Failed to fetch profile data');
+        return;
+      }
+
+      const profileData = await profileResp.json();
+      const commands = profileData.commands || {};
+
+      // Add each command from the profile
+      for (const [cmdId, cmd] of Object.entries(commands)) {
+        await fetch(`/api/vda_ir_control/serial_devices/${deviceId}/commands`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(cmd),
+        });
+      }
+
+      // If it's a matrix profile with routing/query templates, update the device
+      if (profileData.routing_template || profileData.query_template) {
+        await fetch(`/api/vda_ir_control/serial_devices/${deviceId}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            routing_template: profileData.routing_template || '',
+            query_template: profileData.query_template || '',
+          }),
+        });
+      }
+
+      console.log(`Applied profile ${profileId} to device ${deviceId}`);
+    } catch (e) {
+      console.error('Failed to apply profile to device:', e);
     }
   }
 
