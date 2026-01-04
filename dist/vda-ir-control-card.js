@@ -3384,7 +3384,8 @@ class VDAIRControlCard extends HTMLElement {
             </div>
           </div>
 
-          <!-- Screen Link Section (for projectors) -->
+          <!-- Screen Link Section (for projectors - hidden for screen devices) -->
+          ${!(device.device_profile_id && (device.device_profile_id.toLowerCase().includes('screen') || device.device_profile_id.toLowerCase().includes('elite'))) ? `
           <div style="margin-top: 16px; padding: 12px; background: var(--secondary-background-color, #f5f5f5); border-radius: 8px;">
             <div class="form-group" style="margin-bottom: 8px;">
               <label><input type="checkbox" id="edit-device-link-screen" ${device.linked_screen_id ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;" />Link to Projector Screen</label>
@@ -3397,6 +3398,7 @@ class VDAIRControlCard extends HTMLElement {
                   <option value="">Select a screen...</option>
                   ${this._devices.filter(d => {
                     if (!d.device_profile_id) return false;
+                    if (d.device_id === device.device_id) return false; // Exclude self
                     const pid = d.device_profile_id.toLowerCase();
                     return pid.includes('screen') || pid.includes('elite');
                   }).map(d => `
@@ -3425,6 +3427,7 @@ class VDAIRControlCard extends HTMLElement {
               ` : ''}
             </div>
           </div>
+          ` : ''}
 
           <div class="modal-actions">
             <button class="btn btn-secondary" data-action="close-modal">Cancel</button>
