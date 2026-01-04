@@ -1802,17 +1802,17 @@ class VDAIRControlCard extends HTMLElement {
 
           <div class="form-group">
             <label>Device ID</label>
-            <input type="text" id="device-id" placeholder="e.g., bar_tv_1">
+            <input type="text" id="device-id" placeholder="e.g., bar_tv_1" value="${this._modal?.formData?.deviceId || ''}">
           </div>
 
           <div class="form-group">
             <label>Device Name</label>
-            <input type="text" id="device-name" placeholder="e.g., Bar TV 1">
+            <input type="text" id="device-name" placeholder="e.g., Bar TV 1" value="${this._modal?.formData?.deviceName || ''}">
           </div>
 
           <div class="form-group">
             <label>Location</label>
-            <input type="text" id="device-location" placeholder="e.g., Bar Area">
+            <input type="text" id="device-location" placeholder="e.g., Bar Area" value="${this._modal?.formData?.deviceLocation || ''}">
           </div>
 
           <div class="form-group">
@@ -1821,14 +1821,14 @@ class VDAIRControlCard extends HTMLElement {
               ${this._builtinProfiles.length > 0 ? `
                 <optgroup label="Downloaded Profiles">
                   ${this._builtinProfiles.map(p => `
-                    <option value="builtin:${p.profile_id}" ${this._modal?.preselectedProfile === `builtin:${p.profile_id}` ? 'selected' : ''}>${p.name} (${p.manufacturer})</option>
+                    <option value="builtin:${p.profile_id}" ${(this._modal?.formData?.deviceProfile || this._modal?.preselectedProfile) === `builtin:${p.profile_id}` ? 'selected' : ''}>${p.name} (${p.manufacturer})</option>
                   `).join('')}
                 </optgroup>
               ` : ''}
               ${this._profiles.length > 0 ? `
                 <optgroup label="My Custom Profiles">
                   ${this._profiles.map(p => `
-                    <option value="${p.profile_id}" ${this._modal?.preselectedProfile === p.profile_id ? 'selected' : ''}>${p.name}</option>
+                    <option value="${p.profile_id}" ${(this._modal?.formData?.deviceProfile || this._modal?.preselectedProfile) === p.profile_id ? 'selected' : ''}>${p.name}</option>
                   `).join('')}
                 </optgroup>
               ` : ''}
@@ -1841,7 +1841,7 @@ class VDAIRControlCard extends HTMLElement {
               <label>Board</label>
               <select id="device-board" data-action="device-board-changed">
                 ${boards.map(b => `
-                  <option value="${b.board_id}">${b.board_name}</option>
+                  <option value="${b.board_id}" ${this._modal?.formData?.selectedBoard === b.board_id ? 'selected' : ''}>${b.board_name}</option>
                 `).join('')}
               </select>
             </div>
@@ -4051,6 +4051,14 @@ class VDAIRControlCard extends HTMLElement {
 
       case 'device-board-changed':
         const deviceBoardId = e.target.value;
+        // Preserve form values before re-render
+        this._modal.formData = {
+          deviceId: this.shadowRoot.getElementById('device-id')?.value || '',
+          deviceName: this.shadowRoot.getElementById('device-name')?.value || '',
+          deviceLocation: this.shadowRoot.getElementById('device-location')?.value || '',
+          deviceProfile: this.shadowRoot.getElementById('device-profile')?.value || '',
+          selectedBoard: deviceBoardId
+        };
         await this._loadDeviceOutputPorts(deviceBoardId);
         this._render();
         break;
