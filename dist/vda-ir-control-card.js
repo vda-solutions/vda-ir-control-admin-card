@@ -776,6 +776,10 @@ class VDAIRControlCard extends HTMLElement {
           background: var(--error-color, #db4437);
           color: white;
         }
+        .btn-success {
+          background: var(--success-color, #4caf50);
+          color: white;
+        }
         .btn-small {
           padding: 4px 12px;
           font-size: 12px;
@@ -1630,6 +1634,12 @@ class VDAIRControlCard extends HTMLElement {
               </div>
             </div>
             <div class="list-item-actions">
+              <button class="btn btn-success btn-small" data-action="group-power-on" data-group-id="${group.group_id}" title="Turn all devices ON">
+                All On
+              </button>
+              <button class="btn btn-secondary btn-small" data-action="group-power-off" data-group-id="${group.group_id}" title="Turn all devices OFF">
+                All Off
+              </button>
               <button class="btn btn-secondary btn-small" data-action="edit-group" data-group-id="${group.group_id}">
                 Edit
               </button>
@@ -4466,6 +4476,14 @@ class VDAIRControlCard extends HTMLElement {
         }
         break;
 
+      case 'group-power-on':
+        await this._sendGroupPower(e.target.closest('[data-group-id]').dataset.groupId, 'on');
+        break;
+
+      case 'group-power-off':
+        await this._sendGroupPower(e.target.closest('[data-group-id]').dataset.groupId, 'off');
+        break;
+
       case 'save-group':
         await this._saveDeviceGroup();
         break;
@@ -5460,6 +5478,40 @@ class VDAIRControlCard extends HTMLElement {
     } catch (e) {
       console.error('Failed to delete device group:', e);
       alert('Failed to delete group');
+    }
+  }
+
+  async _sendGroupPower(groupId, action) {
+    try {
+      const resp = await fetch(`/api/vda_ir_control/device_groups/${groupId}/power`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action }),
+      });
+
+      const data = await resp.json();
+      if (resp.ok && data.success) {
+        // Visual feedback
+        const btn = this.shadowRoot.querySelector(`[data-action="group-power-${action}"][data-group-id="${groupId}"]`);
+        if (btn) {
+          const originalText = btn.textContent;
+          btn.textContent = action === 'on' ? 'Sent!' : 'Sent!';
+          btn.disabled = true;
+          setTimeout(() => {
+            btn.textContent = originalText;
+            btn.disabled = false;
+          }, 1500);
+        }
+      } else {
+        const errors = data.results?.filter(r => !r.success).map(r => r.error).join(', ') || 'Unknown error';
+        alert(`Some devices failed: ${errors}`);
+      }
+    } catch (e) {
+      console.error('Failed to send group power:', e);
+      alert('Failed to send power command');
     }
   }
 
