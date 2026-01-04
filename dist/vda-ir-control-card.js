@@ -3408,14 +3408,13 @@ class VDAIRControlCard extends HTMLElement {
                 <label>Trigger Device</label>
                 <select id="edit-device-screen-id">
                   <option value="">Select a device...</option>
-                  ${this._devices.filter(d => {
+                  ${[...this._devices.filter(d => {
                     if (!d.device_profile_id) return false;
-                    if (d.device_id === device.device_id) return false; // Exclude self
+                    if (d.device_id === device.device_id) return false;
                     const pid = d.device_profile_id.toLowerCase();
-                    // Show NON-screen devices (projectors, TVs, etc.)
                     return !pid.includes('screen') && !pid.includes('elite');
-                  }).map(d => `
-                    <option value="${d.device_id}" ${device.linked_screen_id === d.device_id ? 'selected' : ''}>${d.name}</option>
+                  }), ...(this._serialDevices || []).filter(d => d.device_id !== device.device_id)].map(d => `
+                    <option value="${d.device_id}" ${device.linked_screen_id === d.device_id ? 'selected' : ''}>${d.name}${d.device_type ? ` (${d.device_type})` : ''}</option>
                   `).join('')}
                 </select>
                 <small>When this device powers on → screen goes down; powers off → screen goes up</small>
