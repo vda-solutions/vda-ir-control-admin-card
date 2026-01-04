@@ -2186,6 +2186,18 @@ class VDAIRControlCard extends HTMLElement {
               </div>
             ` : ''}
 
+            <!-- Timed Down for Screen Devices -->
+            ${(profileId.toLowerCase().includes('screen') || profileId.toLowerCase().includes('elite')) && commands.includes('down') && commands.includes('stop') ? `
+              <div class="remote-section" style="background: var(--secondary-background-color, #f5f5f5); padding: 12px; border-radius: 8px;">
+                <div style="font-size: 11px; color: var(--secondary-text-color); margin-bottom: 8px; text-align: center;">Timed Down</div>
+                <div style="display: flex; gap: 8px; align-items: center; justify-content: center;">
+                  <input type="number" id="screen-timed-delay" step="0.01" min="0" max="60" placeholder="Seconds" value="${this._modal.screenDelay || ''}" style="width: 100px; padding: 8px; border-radius: 4px; border: 1px solid var(--divider-color, #ccc);">
+                  <button class="btn btn-primary" data-action="remote-timed-down" style="white-space: nowrap;">Timed Down</button>
+                </div>
+                <div style="font-size: 10px; color: var(--secondary-text-color); margin-top: 6px; text-align: center;">Send Down, wait, then Stop</div>
+              </div>
+            ` : ''}
+
           </div>
 
           <div class="modal-actions">
@@ -3384,28 +3396,29 @@ class VDAIRControlCard extends HTMLElement {
             </div>
           </div>
 
-          <!-- Screen Link Section (for projectors - hidden for screen devices) -->
-          ${!(device.device_profile_id && (device.device_profile_id.toLowerCase().includes('screen') || device.device_profile_id.toLowerCase().includes('elite'))) ? `
+          <!-- Screen Link Section (only for screen devices - link to triggering device) -->
+          ${(device.device_profile_id && (device.device_profile_id.toLowerCase().includes('screen') || device.device_profile_id.toLowerCase().includes('elite'))) ? `
           <div style="margin-top: 16px; padding: 12px; background: var(--secondary-background-color, #f5f5f5); border-radius: 8px;">
             <div class="form-group" style="margin-bottom: 8px;">
-              <label><input type="checkbox" id="edit-device-link-screen" ${device.linked_screen_id ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;" />Link to Projector Screen</label>
-              <small>Automatically control a motorized projector screen when powering this device</small>
+              <label><input type="checkbox" id="edit-device-link-screen" ${device.linked_screen_id ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;" />Link to Device</label>
+              <small>Automatically activate this screen when the linked device powers on/off</small>
             </div>
             <div id="edit-screen-link-options" style="display: ${device.linked_screen_id ? 'block' : 'none'};">
               <div class="form-group">
-                <label>Screen Device</label>
+                <label>Trigger Device</label>
                 <select id="edit-device-screen-id">
-                  <option value="">Select a screen...</option>
+                  <option value="">Select a device...</option>
                   ${this._devices.filter(d => {
                     if (!d.device_profile_id) return false;
                     if (d.device_id === device.device_id) return false; // Exclude self
                     const pid = d.device_profile_id.toLowerCase();
-                    return pid.includes('screen') || pid.includes('elite');
+                    // Show NON-screen devices (projectors, TVs, etc.)
+                    return !pid.includes('screen') && !pid.includes('elite');
                   }).map(d => `
                     <option value="${d.device_id}" ${device.linked_screen_id === d.device_id ? 'selected' : ''}>${d.name}</option>
                   `).join('')}
                 </select>
-                <small>Select a projector screen device to control</small>
+                <small>When this device powers on → screen goes down; powers off → screen goes up</small>
               </div>
               <div class="form-group">
                 <label>Screen Down Delay (seconds)</label>
@@ -4195,6 +4208,10 @@ class VDAIRControlCard extends HTMLElement {
         await this._sendRemoteCommand(e.target.dataset.command);
         break;
 
+      case 'remote-timed-down':
+        await this._remoteTimedDown();
+        break;
+
       case 'send-ha-remote-cmd':
         const cmdBtn = e.target.closest('[data-command]');
         if (cmdBtn && cmdBtn.dataset.command) {
@@ -4964,6 +4981,49 @@ class VDAIRControlCard extends HTMLElement {
               device_id: screenId,
               command: 'stop',
             });
+          } catch (e) {
+            console.error('Failed to send screen stop:', e);
+            alert('Failed to send screen stop');
+          }
+        }, delay * 1000);
+      }
+    } catch (e) {
+      console.error('Failed to send timed down:', e);
+      alert('Failed to send timed down');
+    }
+  }
+
+  async _remoteTimedDown() {
+    if (!this._modal || !this._modal.deviceId) return;
+
+    const delayInput = this.shadowRoot.getElementById('screen-timed-delay');
+    const delay = delayInput?.value ? parseFloat(delayInput.value) : 0;
+
+    // Store delay in modal for persistence
+    this._modal.screenDelay = delay;
+
+    try {
+      // Send down command
+      await this._hass.callService('vda_ir_control', 'send_command', {
+        device_id: this._modal.deviceId,
+        command: 'down',
+      });
+
+      this._modal.lastSent = 'down';
+      this._render();
+
+      if (delay > 0) {
+        // Wait for the delay, then send stop
+        setTimeout(async () => {
+          try {
+            await this._hass.callService('vda_ir_control', 'send_command', {
+              device_id: this._modal.deviceId,
+              command: 'stop',
+            });
+            if (this._modal) {
+              this._modal.lastSent = 'stop';
+              this._render();
+            }
           } catch (e) {
             console.error('Failed to send screen stop:', e);
             alert('Failed to send screen stop');
