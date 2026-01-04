@@ -3395,7 +3395,11 @@ class VDAIRControlCard extends HTMLElement {
                 <label>Screen Device</label>
                 <select id="edit-device-screen-id">
                   <option value="">Select a screen...</option>
-                  ${this._devices.filter(d => d.device_profile_id && d.device_profile_id.includes('projector_screen')).map(d => `
+                  ${this._devices.filter(d => {
+                    if (!d.device_profile_id) return false;
+                    const pid = d.device_profile_id.toLowerCase();
+                    return pid.includes('screen') || pid.includes('elite');
+                  }).map(d => `
                     <option value="${d.device_id}" ${device.linked_screen_id === d.device_id ? 'selected' : ''}>${d.name}</option>
                   `).join('')}
                 </select>
