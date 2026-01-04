@@ -3384,6 +3384,44 @@ class VDAIRControlCard extends HTMLElement {
             </div>
           </div>
 
+          <!-- Screen Link Section (for projectors) -->
+          <div style="margin-top: 16px; padding: 12px; background: var(--secondary-background-color, #f5f5f5); border-radius: 8px;">
+            <div class="form-group" style="margin-bottom: 8px;">
+              <label><input type="checkbox" id="edit-device-link-screen" ${device.linked_screen_id ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;" />Link to Projector Screen</label>
+              <small>Automatically control a motorized projector screen when powering this device</small>
+            </div>
+            <div id="edit-screen-link-options" style="display: ${device.linked_screen_id ? 'block' : 'none'};">
+              <div class="form-group">
+                <label>Screen Device</label>
+                <select id="edit-device-screen-id">
+                  <option value="">Select a screen...</option>
+                  ${this._devices.filter(d => d.device_profile_id && d.device_profile_id.includes('projector_screen')).map(d => `
+                    <option value="${d.device_id}" ${device.linked_screen_id === d.device_id ? 'selected' : ''}>${d.name}</option>
+                  `).join('')}
+                </select>
+                <small>Select a projector screen device to control</small>
+              </div>
+              <div class="form-group">
+                <label>Screen Down Delay (seconds)</label>
+                <input type="number" id="edit-device-screen-delay" value="${device.screen_down_delay || ''}" step="0.01" min="0" max="60" placeholder="e.g., 3.75">
+                <small>Time to wait after down before sending stop (for partial lower)</small>
+              </div>
+              ${device.linked_screen_id ? `
+                <div class="form-group">
+                  <label>Test Screen Controls</label>
+                  <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button class="btn btn-secondary" data-action="test-screen-cmd" data-screen-id="${device.linked_screen_id}" data-cmd="up" style="flex: 1; min-width: 60px;">Up</button>
+                    <button class="btn btn-secondary" data-action="test-screen-cmd" data-screen-id="${device.linked_screen_id}" data-cmd="down" style="flex: 1; min-width: 60px;">Down</button>
+                    <button class="btn btn-secondary" data-action="test-screen-cmd" data-screen-id="${device.linked_screen_id}" data-cmd="stop" style="flex: 1; min-width: 60px;">Stop</button>
+                  </div>
+                  <div style="margin-top: 8px;">
+                    <button class="btn btn-primary" data-action="test-timed-down" data-screen-id="${device.linked_screen_id}" style="width: 100%;">Test Timed Down (${device.screen_down_delay || 0}s)</button>
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+
           <div class="modal-actions">
             <button class="btn btn-secondary" data-action="close-modal">Cancel</button>
             <button class="btn btn-primary" data-action="update-device">Save Changes</button>
@@ -3846,6 +3884,15 @@ class VDAIRControlCard extends HTMLElement {
           await this._updateEditMatrixPortOptions(e.target.value, e.target.options[e.target.selectedIndex]?.dataset.type);
         });
       }
+
+      // Add event listener for screen link checkbox
+      const screenCheckbox = this.shadowRoot.getElementById('edit-device-link-screen');
+      const screenOptionsDiv = this.shadowRoot.getElementById('edit-screen-link-options');
+      if (screenCheckbox && screenOptionsDiv) {
+        screenCheckbox.addEventListener('change', (e) => {
+          screenOptionsDiv.style.display = e.target.checked ? 'block' : 'none';
+        });
+      }
     }, 0);
   }
 
@@ -3948,6 +3995,20 @@ class VDAIRControlCard extends HTMLElement {
       serviceData.matrix_device_type = null;
       serviceData.matrix_port_type = null;
       serviceData.matrix_port = null;
+    }
+
+    // Screen link fields
+    const linkScreen = this.shadowRoot.getElementById('edit-device-link-screen')?.checked;
+    const screenIdSelect = this.shadowRoot.getElementById('edit-device-screen-id');
+    const screenDelayInput = this.shadowRoot.getElementById('edit-device-screen-delay');
+
+    if (linkScreen && screenIdSelect && screenIdSelect.value) {
+      serviceData.linked_screen_id = screenIdSelect.value;
+      serviceData.screen_down_delay = screenDelayInput?.value ? parseFloat(screenDelayInput.value) : null;
+    } else {
+      // Clear screen link
+      serviceData.linked_screen_id = null;
+      serviceData.screen_down_delay = null;
     }
 
     try {
@@ -4132,6 +4193,14 @@ class VDAIRControlCard extends HTMLElement {
         if (cmdBtn && cmdBtn.dataset.command) {
           await this._sendHARemoteCommand(cmdBtn.dataset.command);
         }
+        break;
+
+      case 'test-screen-cmd':
+        await this._testScreenCommand(e.target.dataset.screenId, e.target.dataset.cmd);
+        break;
+
+      case 'test-timed-down':
+        await this._testTimedDown(e.target.dataset.screenId);
         break;
 
       case 'close-modal':
@@ -4849,6 +4918,54 @@ class VDAIRControlCard extends HTMLElement {
     } catch (e) {
       console.error('Failed to send HA command:', e);
       alert(`Failed to send ${command}`);
+    }
+  }
+
+  async _testScreenCommand(screenId, command) {
+    if (!screenId || !command) return;
+
+    try {
+      await this._hass.callService('vda_ir_control', 'send_command', {
+        device_id: screenId,
+        command: command,
+      });
+    } catch (e) {
+      console.error('Failed to send screen command:', e);
+      alert(`Failed to send screen ${command}`);
+    }
+  }
+
+  async _testTimedDown(screenId) {
+    if (!screenId) return;
+
+    // Get the delay from the input field
+    const delayInput = this.shadowRoot.getElementById('edit-device-screen-delay');
+    const delay = delayInput?.value ? parseFloat(delayInput.value) : 0;
+
+    try {
+      // Send down command
+      await this._hass.callService('vda_ir_control', 'send_command', {
+        device_id: screenId,
+        command: 'down',
+      });
+
+      if (delay > 0) {
+        // Wait for the delay, then send stop
+        setTimeout(async () => {
+          try {
+            await this._hass.callService('vda_ir_control', 'send_command', {
+              device_id: screenId,
+              command: 'stop',
+            });
+          } catch (e) {
+            console.error('Failed to send screen stop:', e);
+            alert('Failed to send screen stop');
+          }
+        }, delay * 1000);
+      }
+    } catch (e) {
+      console.error('Failed to send timed down:', e);
+      alert('Failed to send timed down');
     }
   }
 
