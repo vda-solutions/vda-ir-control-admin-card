@@ -91,6 +91,22 @@ All interface icons use crisp SVG graphics for optimal display at any resolution
 
 ## Changelog
 
+### v1.9.0
+- Projector screen linking - link screens to trigger devices (projectors)
+- Configurable screen delay timing for precise positioning
+- Serial device trigger support in dropdown
+- Enhanced device filtering for screen linking
+
+### v1.8.0
+- HA Remote Device support (Apple TV, Roku, Android TV, etc.)
+- Serial device management improvements
+- Matrix routing sensors
+
+### v1.7.0
+- Serial device drivers with community sync
+- Improved profile management
+- Bug fixes for port assignments
+
 ### v1.6.0
 - Added Device Groups tab for creating and managing device groups
 - All icons converted to SVG for crisp display
