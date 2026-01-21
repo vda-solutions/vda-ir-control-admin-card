@@ -1698,6 +1698,11 @@ class VDAIRControlCard extends HTMLElement {
               </div>
             </div>
             <div class="list-item-actions">
+              ${device.device_family === 'directv' || device.device_family === 'cable_box' ? `
+              <button class="btn btn-info btn-small" data-action="channels-ha-device" data-device-id="${device.device_id}">
+                Channels
+              </button>
+              ` : ''}
               <button class="btn btn-secondary btn-small" data-action="test-ha-device" data-device-id="${device.device_id}">
                 Test
               </button>
@@ -1748,6 +1753,8 @@ class VDAIRControlCard extends HTMLElement {
         return this._renderHADeviceModal();
       case 'ha-remote-control':
         return this._renderHARemoteControlModal();
+      case 'channels-ha-device':
+        return this._renderChannelsModal();
       default:
         return '';
     }
@@ -3830,6 +3837,68 @@ class VDAIRControlCard extends HTMLElement {
     `;
   }
 
+  _renderChannelsModal() {
+    const device = this._haDevices.find(d => d.device_id === this._modal.deviceId);
+    if (!device) return '';
+
+    const channels = this._modal.channels || device.channels || [];
+
+    // Common channel logos available
+    const logoOptions = [
+      '', 'espn', 'espn2', 'espn-u', 'espn-news', 'nfl-network', 'nfl-redzone',
+      'fox-sports-1', 'fox-sports-2', 'fox-news-channel', 'fox-business-network',
+      'cnn', 'msnbc', 'cnbc', 'cbs-sports-network', 'tnt', 'tbs', 'usa-network',
+      'hbo', 'hbo-2', 'showtime', 'cinemax', 'starz', 'amc', 'fx', 'fxx',
+      'comedy-central', 'paramount-network', 'mtv', 'vh1', 'bravo', 'e',
+      'food-network', 'hgtv', 'discovery', 'history', 'tlc', 'a-and-e',
+      'nickelodeon', 'disney-channel', 'cartoon-network', 'abc', 'nbc', 'cbs', 'fox'
+    ];
+
+    return `
+      <div class="modal" data-action="close-modal">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
+          <div class="modal-title">Channel Presets - ${device.name}</div>
+          <p style="color: var(--secondary-text-color); font-size: 12px; margin: 0 0 16px 0;">
+            Configure quick-tune channel buttons for this DirecTV/Cable box. These channels will appear on the remote card for any TV connected to this source.
+          </p>
+
+          <div id="channels-list" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
+            ${channels.length === 0 ? `
+              <p style="text-align: center; color: var(--secondary-text-color); padding: 20px;">No channels configured. Click "Add Channel" to get started.</p>
+            ` : channels.map((ch, idx) => `
+              <div class="channel-row" data-index="${idx}" style="display: flex; gap: 8px; align-items: center; padding: 8px; background: var(--secondary-background-color, #f5f5f5); border-radius: 8px;">
+                <div style="flex: 1; display: flex; gap: 8px; flex-wrap: wrap;">
+                  <input type="text" class="channel-name" value="${ch.name || ''}" placeholder="Name (e.g. ESPN)"
+                    style="flex: 1; min-width: 100px; padding: 8px; border: 1px solid var(--divider-color, #e0e0e0); border-radius: 4px;">
+                  <input type="text" class="channel-number" value="${ch.number || ''}" placeholder="Ch #"
+                    style="width: 70px; padding: 8px; border: 1px solid var(--divider-color, #e0e0e0); border-radius: 4px;">
+                  <select class="channel-logo" style="flex: 1; min-width: 120px; padding: 8px; border: 1px solid var(--divider-color, #e0e0e0); border-radius: 4px;">
+                    <option value="">No Logo</option>
+                    ${logoOptions.filter(l => l).map(logo => `
+                      <option value="${logo}" ${ch.logo === logo ? 'selected' : ''}>${logo}</option>
+                    `).join('')}
+                  </select>
+                </div>
+                <button class="btn btn-danger btn-small" data-action="remove-channel" data-index="${idx}" style="padding: 6px 10px;">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                </button>
+              </div>
+            `).join('')}
+          </div>
+
+          <button class="btn btn-secondary" data-action="add-channel" style="width: 100%; margin-bottom: 16px;">
+            + Add Channel
+          </button>
+
+          <div class="modal-actions">
+            <button class="btn btn-secondary" data-action="close-modal">Cancel</button>
+            <button class="btn btn-primary" data-action="save-channels">Save Channels</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   async _openEditDeviceModal(deviceId) {
     const device = this._devices.find(d => d.device_id === deviceId);
     if (!device) {
@@ -4610,6 +4679,35 @@ class VDAIRControlCard extends HTMLElement {
       case 'test-ha-device':
         this._modal = { type: 'ha-remote-control', deviceId: e.target.closest('[data-device-id]').dataset.deviceId };
         this._render();
+        break;
+
+      case 'channels-ha-device':
+        const channelsDeviceId = e.target.closest('[data-device-id]').dataset.deviceId;
+        const channelsDevice = this._haDevices.find(d => d.device_id === channelsDeviceId);
+        if (channelsDevice) {
+          this._modal = { type: 'channels-ha-device', deviceId: channelsDeviceId, channels: [...(channelsDevice.channels || [])] };
+          this._render();
+        }
+        break;
+
+      case 'add-channel':
+        if (this._modal && this._modal.type === 'channels-ha-device') {
+          this._modal.channels = this._modal.channels || [];
+          this._modal.channels.push({ name: '', number: '', logo: '' });
+          this._render();
+        }
+        break;
+
+      case 'remove-channel':
+        if (this._modal && this._modal.type === 'channels-ha-device') {
+          const removeIdx = parseInt(e.target.closest('[data-index]').dataset.index);
+          this._modal.channels.splice(removeIdx, 1);
+          this._render();
+        }
+        break;
+
+      case 'save-channels':
+        await this._saveHADeviceChannels();
         break;
 
       case 'toggle-ha-matrix-link':
@@ -5921,6 +6019,49 @@ class VDAIRControlCard extends HTMLElement {
     } catch (e) {
       console.error('Failed to save HA device:', e);
       alert('Failed to save HA device');
+    }
+  }
+
+  async _saveHADeviceChannels() {
+    if (!this._modal || this._modal.type !== 'channels-ha-device') return;
+
+    const deviceId = this._modal.deviceId;
+
+    // Collect current values from form
+    const channelRows = this.shadowRoot.querySelectorAll('.channel-row');
+    const channels = [];
+
+    channelRows.forEach((row) => {
+      const name = row.querySelector('.channel-name')?.value?.trim() || '';
+      const number = row.querySelector('.channel-number')?.value?.trim() || '';
+      const logo = row.querySelector('.channel-logo')?.value || '';
+
+      if (name || number) {
+        channels.push({ name, number, logo });
+      }
+    });
+
+    try {
+      const resp = await fetch(`/api/vda_ir_control/ha_devices/${deviceId}/channels`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${this._hass.auth.data.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ channels }),
+      });
+
+      if (resp.ok) {
+        this._modal = null;
+        await this._loadHADevices();
+        this._render();
+      } else {
+        const error = await resp.json();
+        alert('Failed to save channels: ' + (error.error || 'Unknown error'));
+      }
+    } catch (e) {
+      console.error('Failed to save channels:', e);
+      alert('Failed to save channels');
     }
   }
 
